@@ -13,6 +13,7 @@
 #include <nav2_msgs/action/compute_path_to_pose.hpp>
 #include <nav2_msgs/action/follow_gps_waypoints.hpp>
 #include <nav2_msgs/action/follow_path.hpp>
+#include <nav2_msgs/action/wait.hpp>
 #include <nav2_msgs/action/follow_waypoints.hpp>
 #include <nav2_msgs/action/navigate_through_poses.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
@@ -40,26 +41,28 @@ public:
 
     // here we will creat public methods
     BasicNavigator()
+        : Node("basic_navigator") 
+
     {
         nav_to_pose_client_ =
-            rclcpp_action::create_client<NavigateToPose>(this, "navigate_to_pose");
+            rclcpp_action::create_client<NavToPoseT>(this, "navigate_to_pose");
         follow_gps_waypoints_client_ =
-            rclcpp_action::create_client<FollowGPSWaypoints>(
+            rclcpp_action::create_client<FollowGPSWaypointsT>(
                 this, "follow_gps_waypoints");
         follow_path_client_ =
-            rclcpp_action::create_client<FollowPath>(this, "follow_path");
+            rclcpp_action::create_client<FollowPathT>(this, "follow_path");
         navigation_through_poses_client_ =
-            rclcpp_action::create_client<NavigateThroughPoses>(
+            rclcpp_action::create_client<NavigateThroughPosesT>(
                 this, "navigation_through_poses");
         smooth_path_client_ =
-            rclcpp_action::create_client<SmoothPath>(this, "smooth_path");
-        spin_client_ = rclcpp_action::create_client<Spin>(this, "spin");
-        wait_client_ = rclcpp_action::create_client<Wait>(this, "wait");
+            rclcpp_action::create_client<SmoothPathT>(this, "smooth_path");
+        spin_client_ = rclcpp_action::create_client<SpinT>(this, "spin");
+        wait_client_ = rclcpp_action::create_client<WaitT>(this, "wait");
     }
 
     // Commander API
     bool goToPose(const geometry_msgs::msg::PoseStamped &pose_stamped);
-    TaskResult getResult();
+    // TaskResult getResult();
     void getFeedback();
     void goThroughPoses();
     void setInitialPose();
@@ -92,7 +95,7 @@ private:
     using WaitT = nav2_msgs::action::Wait;
 
     // using for goal handle
-    using NavToPoseHandle = rclcpp_action::ClientGoalHandle<NavigateToPoseT>;
+    using NavToPoseHandle = rclcpp_action::ClientGoalHandle<NavToPoseT>;
     using FollowGPSWaypointsHandle =
         rclcpp_action::ClientGoalHandle<FollowGPSWaypointsT>;
     using FollowPathHandle = rclcpp_action::ClientGoalHandle<FollowPathT>;

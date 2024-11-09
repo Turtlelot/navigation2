@@ -1,0 +1,14 @@
+version: '3'
+services:
+  nav2_ws:
+    container_name: nav2_container
+    build: .
+    environment:
+      - DISPLAY=$DISPLAY
+      - XAUTHORITY=$XAUTHORITY
+    volumes:
+      - ./src:/root/nav2_ws/src
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - $HOME/.Xauthority:/root/.Xauthority
+    # command: ["bash", "-c", "source /root/ws/install/setup.bash && ls && tail -f /dev/null"]
+

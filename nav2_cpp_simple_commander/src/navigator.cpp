@@ -1,4 +1,4 @@
-#include "navigator.hpp"
+#include "nav2_cpp_simple_commander/navigator.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include <chrono>
 

@@ -3,7 +3,7 @@ project(nav2_cpp_simple_commander)
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 # Find dependencies
@@ -15,15 +15,19 @@ find_package(geometry_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 
-# Create include directories
-include_directories(include)
+# Include directories
+include_directories(
+  include
+)
 
-# Declare the executable
-add_executable(robot_navigator src/robot_navigator.cpp)
+# Add the executable
+add_executable(robot_navigator
+  src/robot_navigator.cpp
+  src/navigator.cpp
+)
 
-# Specify libraries to link a library or executable target against
-ament_target_dependencies(
-  robot_navigator
+# Link dependencies to the executable
+ament_target_dependencies(robot_navigator
   rclcpp
   rclcpp_action
   nav2_msgs
@@ -32,13 +36,15 @@ ament_target_dependencies(
   action_msgs
 )
 
-install(TARGETS
-robot_navigator
+# Install the executable
+install(TARGETS robot_navigator
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Install header files
 install(DIRECTORY include/
   DESTINATION include/
 )
 
+# Package declaration
 ament_package()

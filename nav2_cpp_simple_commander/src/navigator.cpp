@@ -29,25 +29,18 @@ namespace Nav2SimpleCommander
         goal);
   }
 
-  /**
-   * Core runner for any NAV2 Action:
-   * 1) wait for server
-   * 2) async_send_goal
-   * 3) spin_until_future_complete
-   * 4) check accepted
-   * 5) async_get_result
-   * 6) spin_until_future_complete
-   */
-
   template <typename ActionT>
   bool Navigator::runAction(
       const std::string &action_name,
       const typename ActionT::Goal &goal)
   {
     using ClientT = rclcpp_action::Client<ActionT>;
+    using GoalHandleT = typename rclcpp_action::ClientGoalHandle<ActionT>;
 
-    // 1) wait for server
+    // create action client
     auto client = rclcpp_action::create_client<ActionT>(node_, action_name);
+
+    // wait for server
     RCLCPP_INFO(node_->get_logger(),
                 "Waiting for '%s' action server...", action_name.c_str());
     if (!client->wait_for_action_server(std::chrono::seconds(5)))
@@ -57,17 +50,58 @@ namespace Nav2SimpleCommander
       return false;
     }
 
-    // 2) send goal
-    auto goal_handle_future = client->async_send_goal(goal);
+    // prepare send_goal options
+    typename ClientT::SendGoalOptions send_goal_options;
+    send_goal_options.goal_response_callback = [&](const typename GoalHandleT::SharedPtr &goal_handle)
+    {
+      if (!goal_handle)
+      {
+        RCLCPP_ERROR(node_->get_logger(), "Goal was rejected by server");
+      }
+      else
+      {
+        RCLCPP_INFO(node_->get_logger(), "Goal accepted by server, waiting for result");
+      }
+    };
 
-    // 3) spin until goal is sent
+    send_goal_options.feedback_callback =
+        [&](typename GoalHandleT::SharedPtr,
+            const std::shared_ptr<const typename ActionT::Feedback> feedback)
+    {
+      RCLCPP_DEBUG(node_->get_logger(), "Feedback received");
+    };
+
+    send_goal_options.result_callback =
+        [&](const typename GoalHandleT::WrappedResult &result)
+    {
+      switch (result.code)
+      {
+      case rclcpp_action::ResultCode::SUCCEEDED:
+        RCLCPP_INFO(node_->get_logger(), "Goal completed successfully");
+        break;
+      case rclcpp_action::ResultCode::ABORTED:
+        RCLCPP_ERROR(node_->get_logger(), "Goal was aborted");
+        break;
+      case rclcpp_action::ResultCode::CANCELED:
+        RCLCPP_ERROR(node_->get_logger(), "Goal was canceled");
+        break;
+      default:
+        RCLCPP_ERROR(node_->get_logger(), "Unknown result code");
+        break;
+      }
+    };
+
+    // send goal
+    auto goal_handle_future = client->async_send_goal(goal, send_goal_options);
+
+    // spin until goal is sent
     if (rclcpp::spin_until_future_complete(node_, goal_handle_future) != rclcpp::FutureReturnCode::SUCCESS)
     {
       RCLCPP_ERROR(node_->get_logger(), "send_goal_async failed");
       return false;
     }
 
-    // 4) check acceptance
+    // check acceptance
     auto goal_handle = goal_handle_future.get();
     if (!goal_handle)
     {
@@ -76,7 +110,7 @@ namespace Nav2SimpleCommander
       return false;
     }
 
-    // 5) wait for result
+    // wait for result
     auto result_future = client->async_get_result(goal_handle);
     if (rclcpp::spin_until_future_complete(node_, result_future) != rclcpp::FutureReturnCode::SUCCESS)
     {
@@ -84,7 +118,7 @@ namespace Nav2SimpleCommander
       return false;
     }
 
-    // 6) done! we ignore the actual result message here.
+    // done! we ignore the actual result message here.
     return true;
   }
 

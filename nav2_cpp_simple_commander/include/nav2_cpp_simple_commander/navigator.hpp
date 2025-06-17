@@ -40,17 +40,4 @@ private:
 
 }  // namespace Nav2SimpleCommander
 
-// Explicit template instantiation declarations
-extern template bool
-Nav2SimpleCommander::Navigator::runAction<Nav2SimpleCommander::Navigator::NavigateToPose>(
-  const std::string &, const Nav2SimpleCommander::Navigator::NavigateToPose::Goal &,
-  std::function<
-    void(std::shared_ptr<const Nav2SimpleCommander::Navigator::NavigateToPose::Feedback>)>);
-
-extern template bool
-Nav2SimpleCommander::Navigator::runAction<Nav2SimpleCommander::Navigator::FollowWaypoints>(
-  const std::string &, const Nav2SimpleCommander::Navigator::FollowWaypoints::Goal &,
-  std::function<
-    void(std::shared_ptr<const Nav2SimpleCommander::Navigator::FollowWaypoints::Feedback>)>);
-
 #endif  // NAV2_SIMPLE_COMMANDER_CPP__NAVIGATOR_HPP_

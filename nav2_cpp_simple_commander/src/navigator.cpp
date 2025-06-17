@@ -128,15 +128,4 @@ bool Navigator::runAction(
   return true;
 }
 
-// explicit instantiations for the two NAV2 actions
-template bool Navigator::runAction<Navigator::NavigateToPose>(
-  const std::string &, const Navigator::NavigateToPose::Goal &,
-  std::function<
-    void(std::shared_ptr<const Nav2SimpleCommander::Navigator::NavigateToPose::Feedback>)>);
-
-template bool Navigator::runAction<Navigator::FollowWaypoints>(
-  const std::string &, const Navigator::FollowWaypoints::Goal &,
-  std::function<
-    void(std::shared_ptr<const Nav2SimpleCommander::Navigator::FollowWaypoints::Feedback>)>);
-
 }  // namespace Nav2SimpleCommander

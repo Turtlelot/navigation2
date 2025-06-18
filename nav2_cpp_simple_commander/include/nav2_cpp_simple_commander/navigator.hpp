@@ -2,13 +2,27 @@
 #ifndef NAV2_SIMPLE_COMMANDER_CPP__NAVIGATOR_HPP_
 #define NAV2_SIMPLE_COMMANDER_CPP__NAVIGATOR_HPP_
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "geographic_msgs/msg/geo_pose.hpp"
+#include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav2_msgs/action/assisted_teleop.hpp"
+#include "nav2_msgs/action/back_up.hpp"
+#include "nav2_msgs/action/compute_path_through_poses.hpp"
+#include "nav2_msgs/action/compute_path_to_pose.hpp"
+#include "nav2_msgs/action/drive_on_heading.hpp"
+#include "nav2_msgs/action/follow_gps_waypoints.hpp"
+#include "nav2_msgs/action/follow_path.hpp"
 #include "nav2_msgs/action/follow_waypoints.hpp"
+#include "nav2_msgs/action/navigate_through_poses.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
+#include "nav2_msgs/action/smooth_path.hpp"
+#include "nav2_msgs/action/spin.hpp"
+#include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace Nav2SimpleCommander
@@ -17,15 +31,68 @@ class Navigator
 {
 public:
   using NavigateToPose = nav2_msgs::action::NavigateToPose;
+  using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
   using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
+  using FollowGPSWaypoints = nav2_msgs::action::FollowGPSWaypoints;
+  using BackUp = nav2_msgs::action::BackUp;
+  using Spin = nav2_msgs::action::Spin;
+  using DriveOnHeading = nav2_msgs::action::DriveOnHeading;
+  using AssistedTeleop = nav2_msgs::action::AssistedTeleop;
+  using FollowPath = nav2_msgs::action::FollowPath;
+  using ComputePathToPose = nav2_msgs::action::ComputePathToPose;
+  using ComputePathThroughPoses = nav2_msgs::action::ComputePathThroughPoses;
+  using SmoothPath = nav2_msgs::action::SmoothPath;
+
+  using PoseStamped = geometry_msgs::msg::PoseStamped;
+  using Path = nav_msgs::msg::Path;
+  using GeoPose = geographic_msgs::msg::GeoPose;
 
   explicit Navigator(rclcpp::Node::SharedPtr node);
 
   /// Send a NavigateToPose goal. Returns true on success.
-  bool goToPose(const geometry_msgs::msg::PoseStamped & pose);
+  bool goToPose(const PoseStamped & pose, const std::string & behavior_tree = "");
+
+  /// Send a NavigateThroughPoses goal. Returns true on success.
+  bool goThroughPoses(
+    const std::vector<PoseStamped> & poses, const std::string & behavior_tree = "");
 
   /// Send a FollowWaypoints goal. Returns true on success.
-  bool followWaypoints(const std::vector<geometry_msgs::msg::PoseStamped> & poses);
+  bool followWaypoints(const std::vector<PoseStamped> & poses);
+
+  /// Send a FollowGpsWaypoints goal. Returns true on success.
+  bool followGpsWaypoints(const std::vector<GeoPose> & poses);
+
+  /// Spin the robot for a given distance. Returns true on success.
+  bool spin(double spin_dist = 1.57, double time_allowance = 10.0);
+
+  /// Backup the robot for a given distance. Returns true on success.
+  bool backup(double backup_dist = 0.15, double backup_speed = 0.025, double time_allowance = 10.0);
+
+  /// Drive the robot on a heading for a given distance. Returns true on success.
+  bool driveOnHeading(double dist = 0.15, double speed = 0.025, double time_allowance = 10.0);
+
+  /// Perform assisted teleoperation. Returns true on success.
+  bool assistedTeleop(double time_allowance = 30.0);
+
+  /// Follow a path. Returns true on success.
+  bool followPath(
+    const Path & path, const std::string & controller_id = "",
+    const std::string & goal_checker_id = "");
+
+  /// Get a path from the planner. Returns true on success.
+  bool getPath(
+    const PoseStamped & start, const PoseStamped & end, const std::string & planner_id = "",
+    bool use_start = false);
+
+  /// Get a path through poses from the planner. Returns true on success.
+  bool getPathThroughPoses(
+    const PoseStamped & start, const std::vector<PoseStamped> goals,
+    const std::string & planner_id = "", bool use_start = false);
+
+  /// Smooth a path. Returns true on success.
+  bool smoothPath(
+    const Path & path, const std::string & smoother_id = "", double max_duration = 2.0,
+    bool check_for_collision = false);
 
 private:
   rclcpp::Node::SharedPtr node_;
@@ -35,7 +102,8 @@ private:
   template <typename ActionT>
   bool runAction(
     const std::string & action_name, const typename ActionT::Goal & goal,
-    std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb);
+    std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb =
+      nullptr);
 };
 
 }  // namespace Nav2SimpleCommander

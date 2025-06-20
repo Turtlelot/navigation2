@@ -10,6 +10,7 @@
 #include "geographic_msgs/msg/geo_pose.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "nav2_msgs/action/assisted_teleop.hpp"
 #include "nav2_msgs/action/back_up.hpp"
 #include "nav2_msgs/action/compute_path_through_poses.hpp"
@@ -94,9 +95,37 @@ public:
     const Path & path, const std::string & smoother_id = "", double max_duration = 2.0,
     bool check_for_collision = false);
 
+  // Set the initial pose and publish it to the localization system
+  void setInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped & initial_pose);
+  
+  //for test 
+  bool isInitialPoseReceived() const;
+
 private:
   rclcpp::Node::SharedPtr node_;
 
+  // Latest initial pose to publish
+  geometry_msgs::msg::PoseWithCovarianceStamped initial_pose_;
+  
+  // Flag to indicate if initial pose was received by AMCL
+  bool initial_pose_received_ = false;
+
+  // Publisher to send initial pose 
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_pub_;
+
+ // Subscriber to listen for pose feedback from AMCL
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr amcl_pose_sub_;
+
+  // Helper to publish the stored initial pose
+  void publishInitialPose();
+  
+  // Callback for receiving pose from AMCL 
+  // Called when AMCL publishes its pose -> confirms that it accepted our initial pose
+
+  void amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  
+  void waitForInitialPose();
+  
   /// The single templated runner: waits for server, sends goal, spins for
   /// result.
   template <typename ActionT>
@@ -105,6 +134,8 @@ private:
     std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb =
       nullptr);
 };
+
+  void publishInitialPose();
 
 }  // namespace Nav2SimpleCommander
 

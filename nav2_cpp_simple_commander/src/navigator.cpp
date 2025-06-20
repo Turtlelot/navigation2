@@ -7,7 +7,17 @@
 namespace Nav2SimpleCommander
 {
 
-Navigator::Navigator(rclcpp::Node::SharedPtr node) : node_(std::move(node)) {}
+Navigator::Navigator(rclcpp::Node::SharedPtr node) : node_(std::move(node)) {
+  // Create publisher to /initialpose
+  initial_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    "initialpose", 10);
+
+  // Create subscriber to /amcl_pose to monitor when localization acknowledges pose
+  amcl_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+  "amcl_pose", 10,
+  std::bind(&Navigator::amclPoseCallback, this, std::placeholders::_1));
+
+}
 
 bool Navigator::goToPose(
   const geometry_msgs::msg::PoseStamped & pose, const std::string & behavior_tree)
@@ -182,6 +192,46 @@ bool Navigator::smoothPath(
 
   return runAction<SmoothPath>("smooth_path", goal);
 }
+void Navigator::publishInitialPose()
+{
+  RCLCPP_INFO(node_->get_logger(), "Publishing Initial Pose");
+  initial_pose_pub_->publish(initial_pose_);
+}
+
+void Navigator::setInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped & initial_pose)
+{
+  initial_pose_received_ = false; 
+  initial_pose_ = initial_pose;
+  publishInitialPose();
+}
+
+void Navigator::amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
+{
+  RCLCPP_DEBUG(node_->get_logger(), "Received AMCL pose");
+  initial_pose_received_ = true;  
+}
+
+void Navigator::waitForInitialPose()
+{
+  rclcpp::Rate rate(1.0);  
+
+  RCLCPP_INFO(node_->get_logger(), "Waiting for AMCL to report initial pose...");
+
+  while (rclcpp::ok() && !initial_pose_received_) {
+    publishInitialPose();       //in python code it uses set not publish
+    rclcpp::spin_some(node_);
+    rate.sleep();                  
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "Initial pose successfully received by AMCL.");
+}
+
+
+bool Navigator::isInitialPoseReceived() const
+{
+  return initial_pose_received_;
+}
+
 
 template <typename ActionT>
 bool Navigator::runAction(

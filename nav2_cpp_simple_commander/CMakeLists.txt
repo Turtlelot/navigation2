@@ -16,7 +16,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 
-# Include directories
+# Include header files
 include_directories(
   include
 )
@@ -47,6 +47,30 @@ install(TARGETS robot_navigator
 install(DIRECTORY include/
   DESTINATION include/
 )
+
+## Add the executable for examples 
+add_executable(example_nav_to_pose
+  examples/example_nav_to_pose.cpp
+  src/navigator.cpp
+)
+
+# Link dependencies to the executable
+ament_target_dependencies(example_nav_to_pose
+  rclcpp
+  rclcpp_action
+  nav2_msgs
+  geographic_msgs
+  geometry_msgs
+  lifecycle_msgs
+  action_msgs
+)
+
+
+# Install the test node
+install(TARGETS example_nav_to_pose
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 
 # Package declaration
 ament_package()

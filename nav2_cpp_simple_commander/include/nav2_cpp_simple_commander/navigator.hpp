@@ -24,7 +24,9 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav2_msgs/action/smooth_path.hpp"
 #include "nav2_msgs/action/spin.hpp"
+#include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "rclcpp/client.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace Nav2SimpleCommander
@@ -105,6 +107,12 @@ public:
   void waitUntilNav2Active(
     const std::string & navigator = "bt_navigator", const std::string & localizer = "amcl");
 
+  //Startup nav2 lifecycle system.
+  void lifecycleStartup();
+
+  // Shutdown nav2 lifecycle-managed nodes
+  void lifecycleShutdown();
+
 private:
   rclcpp::Node::SharedPtr node_;
 
@@ -127,7 +135,7 @@ private:
   // Called when AMCL publishes its pose -> confirms that it accepted our initial pose
   void amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
 
-// Waits until AMCL receives and processes the initial pose
+  // Waits until AMCL receives and processes the initial pose
   void waitForInitialPose();
 
   // Wait until a lifecycle node becomes active

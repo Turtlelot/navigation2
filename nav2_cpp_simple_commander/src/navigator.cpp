@@ -7,7 +7,16 @@
 namespace Nav2SimpleCommander
 {
 
-Navigator::Navigator(rclcpp::Node::SharedPtr node) : node_(std::move(node)) {}
+Navigator::Navigator(rclcpp::Node::SharedPtr node) : node_(std::move(node))
+{
+  // Create publisher to /initialpose
+  initial_pose_pub_ =
+    node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("initialpose", 10);
+
+  // Create subscriber to /amcl_pose to monitor when localization acknowledges pose
+  amcl_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    "amcl_pose", 10, std::bind(&Navigator::amclPoseCallback, this, std::placeholders::_1));
+}
 
 bool Navigator::goToPose(
   const geometry_msgs::msg::PoseStamped & pose, const std::string & behavior_tree)
@@ -182,7 +191,198 @@ bool Navigator::smoothPath(
 
   return runAction<SmoothPath>("smooth_path", goal);
 }
+void Navigator::publishInitialPose()
+{
+  RCLCPP_INFO(node_->get_logger(), "Publishing Initial Pose");
+  initial_pose_pub_->publish(initial_pose_);
+}
 
+void Navigator::setInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped & initial_pose)
+{
+  initial_pose_received_ = false;
+  initial_pose_ = initial_pose;
+  publishInitialPose();
+}
+
+void Navigator::amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
+{
+  RCLCPP_DEBUG(node_->get_logger(), "Received AMCL pose");
+  initial_pose_received_ = true;
+}
+
+void Navigator::waitForInitialPose()
+{
+  rclcpp::Rate rate(1.0);
+
+  RCLCPP_INFO(node_->get_logger(), "Waiting for AMCL to report initial pose...");
+
+  while (rclcpp::ok() && !initial_pose_received_) {
+    publishInitialPose();  //in python code it uses set not publish //  // re-publish could be outside
+    rclcpp::spin_some(node_);
+    rate.sleep();
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "Initial pose successfully received by AMCL.");
+}
+
+void Navigator::waitForNodeToActivate(const std::string & node_name)
+{
+  using GetState = lifecycle_msgs::srv::GetState;
+  auto client = node_->create_client<GetState>(node_name + "/get_state");
+
+  RCLCPP_INFO(node_->get_logger(), "Waiting for '%s' to become active...", node_name.c_str());
+
+  while (!client->wait_for_service(std::chrono::seconds(1))) {
+    RCLCPP_INFO(
+      node_->get_logger(), "Service '%s/get_state' not available, waiting...", node_name.c_str());
+  }
+
+  auto request = std::make_shared<GetState::Request>();
+  std::string state = "unknown";
+
+  rclcpp::Rate rate(0.5);  //delay 2 sec between each eteration
+
+  while (rclcpp::ok() && state != "active") {
+    auto future = client->async_send_request(request);
+    if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+      state = future.get()->current_state.label;
+      RCLCPP_DEBUG(
+        node_->get_logger(), "Current state of '%s': %s", node_name.c_str(), state.c_str());
+    } else {
+      RCLCPP_WARN(node_->get_logger(), "Failed to get state for node '%s'", node_name.c_str());
+    }
+
+    rate.sleep();
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "'%s' is now active", node_name.c_str());
+}
+
+void Navigator::waitUntilNav2Active(const std::string & navigator, const std::string & localizer)
+{
+  RCLCPP_INFO(node_->get_logger(), "Waiting for Nav2 to become active...");
+
+  if (localizer != "robot_localization") {
+    waitForNodeToActivate(localizer);
+  }
+
+  if (localizer == "amcl") {
+    waitForInitialPose();
+  }
+  waitForNodeToActivate(navigator);
+
+  RCLCPP_INFO(node_->get_logger(), "Nav2 is now active and ready.");
+}
+
+void Navigator::lifecycleStartup()
+{
+  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
+  RCLCPP_INFO(node_->get_logger(), "Starting up lifecycle nodes based on lifecycle_manager.");
+  // Get all services
+  std::map<std::string, std::vector<std::string>> services_and_types =
+    node_->get_service_names_and_types();
+
+  bool found_lifecycle_service = false;
+  for (const auto & service : services_and_types) {
+    const auto & service_name = service.first;
+    const auto & service_type = service.second[0];
+
+    //check for /lifecycle_manager_localization/manage_nodes and /lifecycle_manager_navigation/manage_nodes
+
+    if (service_type == "nav2_msgs/srv/ManageLifecycleNodes") {
+      found_lifecycle_service = true;
+      // Create client
+      auto client = node_->create_client<ManageLifecycleNodes>(service_name);
+
+      // Wait for service
+      // TODO timeout configure
+      while (!client->wait_for_service(std::chrono::seconds(1))) {
+        RCLCPP_INFO(
+          node_->get_logger(), "Service '%s' not available, waiting...", service_name.c_str());
+      }
+
+      //prepare request
+      auto request = std::make_shared<ManageLifecycleNodes::Request>();
+      request->command = ManageLifecycleNodes::Request::STARTUP;
+
+      // Send async request
+      auto future = client->async_send_request(request);
+
+      // Wait for result, retry if needed
+      while (rclcpp::ok()) {
+        // TODO timeout configure
+        if (
+          rclcpp::spin_until_future_complete(node_, future, std::chrono::milliseconds(100)) ==
+          rclcpp::FutureReturnCode::SUCCESS) {
+          break;  // success
+        } else {
+          RCLCPP_WARN(
+            node_->get_logger(), "Retrying lifecycle startup on service '%s'...",
+            service_name.c_str());
+          waitForInitialPose();  // fallback in case system not ready
+        }
+      }
+    }
+  }
+  if (found_lifecycle_service) {
+    RCLCPP_INFO(node_->get_logger(), "Nav2 is ready for use!");
+  } else {
+    RCLCPP_WARN(node_->get_logger(), "No Nav2 lifecycle services found. Is Nav2 launched?");
+  }
+}
+
+void Navigator::lifecycleShutdown()
+{
+  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
+
+  RCLCPP_INFO(node_->get_logger(), "Shutting down lifecycle nodes based on lifecycle_manager.");
+
+  // Get all available services and their types
+  auto services_and_types = node_->get_service_names_and_types();
+
+  for (const auto & service : services_and_types) {
+    const auto service_name = service.first;
+    const auto service_type = service.second[0];
+
+    if (service_type == "nav2_msgs/srv/ManageLifecycleNodes") {
+      RCLCPP_INFO(node_->get_logger(), "Shutting down service: %s", service_name.c_str());
+
+      // Create client for ManageLifecycleNodes
+      auto client = node_->create_client<ManageLifecycleNodes>(service_name);
+
+      // Wait for the service to be available
+      while (!client->wait_for_service(std::chrono::seconds(1))) {
+        RCLCPP_INFO(
+          node_->get_logger(), "Service '%s' not available, waiting...", service_name.c_str());
+      }
+
+      // Create shutdown request
+      auto request = std::make_shared<ManageLifecycleNodes::Request>();
+      request->command = ManageLifecycleNodes::Request::SHUTDOWN;
+
+      // Send async request and wait for it to complete
+      auto future = client->async_send_request(request);
+      if (
+        rclcpp::spin_until_future_complete(node_, future, std::chrono::seconds(5)) ==
+        rclcpp::FutureReturnCode::SUCCESS) {
+        auto response = future.get();
+        if (response->success) {
+          RCLCPP_INFO(
+            node_->get_logger(), "Successfully shut down node via '%s'", service_name.c_str());
+        } else {
+          RCLCPP_WARN(
+            node_->get_logger(), "Shutdown request to '%s' returned failure", service_name.c_str());
+        }
+      } else {
+        RCLCPP_ERROR(
+          node_->get_logger(), "Failed to receive response from '%s'", service_name.c_str());
+      }
+    }
+    //TODO check result and add even more logging
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
+}
 template <typename ActionT>
 bool Navigator::runAction(
   const std::string & action_name, const typename ActionT::Goal & goal,

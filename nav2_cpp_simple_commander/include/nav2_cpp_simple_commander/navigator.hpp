@@ -10,6 +10,8 @@
 #include "geographic_msgs/msg/geo_pose.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "lifecycle_msgs/srv/get_state.hpp"
 #include "nav2_msgs/action/assisted_teleop.hpp"
 #include "nav2_msgs/action/back_up.hpp"
 #include "nav2_msgs/action/compute_path_through_poses.hpp"
@@ -22,10 +24,12 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav2_msgs/action/smooth_path.hpp"
 #include "nav2_msgs/action/spin.hpp"
+#include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "nav2_msgs/srv/clear_entire_costmap.hpp"
 #include "nav2_msgs/srv/get_costmap.hpp"
 #include "nav2_msgs/srv/load_map.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "rclcpp/client.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace Nav2SimpleCommander
@@ -102,6 +106,20 @@ public:
     const Path & path, const std::string & smoother_id = "", double max_duration = 2.0,
     bool check_for_collision = false);
 
+  // Set the initial pose and publish it to the localization system
+  void setInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped & initial_pose);
+
+  // Waits until the navigation system is fully active.
+  // Blocks until the specified localizer and navigator nodes are active.
+  // If the localizer is "amcl", it waits for initial pose to be received.
+  void waitUntilNav2Active(
+    const std::string & navigator = "bt_navigator", const std::string & localizer = "amcl");
+
+  //Startup nav2 lifecycle system.
+  void lifecycleStartup();
+
+  // Shutdown nav2 lifecycle-managed nodes
+  void lifecycleShutdown();
   /// Load a map from a file.
   void changeMap(const std::string & map_filepath);
 
@@ -123,6 +141,31 @@ public:
 private:
   rclcpp::Node::SharedPtr node_;
 
+  // Latest initial pose to publish
+  geometry_msgs::msg::PoseWithCovarianceStamped initial_pose_;
+
+  // Flag to indicate if initial pose was received by AMCL
+  bool initial_pose_received_ = false;
+
+  // Publisher to send initial pose
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_pub_;
+
+  // Subscriber to listen for pose feedback from AMCL
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr amcl_pose_sub_;
+
+  // Helper to publish the stored initial pose
+  void publishInitialPose();
+
+  // Callback for receiving pose from AMCL
+  // Called when AMCL publishes its pose -> confirms that it accepted our initial pose
+  void amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+
+  // Waits until AMCL receives and processes the initial pose
+  void waitForInitialPose();
+
+  // Wait until a lifecycle node becomes active
+  void waitForNodeToActivate(const std::string & node_name);
+
   /// The single templated runner: waits for server, sends goal, spins for
   /// result.
   template <typename ActionT>
@@ -131,6 +174,8 @@ private:
     std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb =
       nullptr);
 };
+
+void publishInitialPose();
 
 }  // namespace Nav2SimpleCommander
 

@@ -25,6 +25,9 @@
 #include "nav2_msgs/action/smooth_path.hpp"
 #include "nav2_msgs/action/spin.hpp"
 #include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
+#include "nav2_msgs/srv/clear_entire_costmap.hpp"
+#include "nav2_msgs/srv/get_costmap.hpp"
+#include "nav2_msgs/srv/load_map.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/client.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -47,9 +50,14 @@ public:
   using ComputePathThroughPoses = nav2_msgs::action::ComputePathThroughPoses;
   using SmoothPath = nav2_msgs::action::SmoothPath;
 
+  using LoadMap = nav2_msgs::srv::LoadMap;
+  using ClearEntireCostmap = nav2_msgs::srv::ClearEntireCostmap;
+  using GetCostmap = nav2_msgs::srv::GetCostmap;
+
   using PoseStamped = geometry_msgs::msg::PoseStamped;
   using Path = nav_msgs::msg::Path;
   using GeoPose = geographic_msgs::msg::GeoPose;
+  using Costmap = nav2_msgs::msg::Costmap;
 
   explicit Navigator(rclcpp::Node::SharedPtr node);
 
@@ -112,6 +120,23 @@ public:
 
   // Shutdown nav2 lifecycle-managed nodes
   void lifecycleShutdown();
+  /// Load a map from a file.
+  void changeMap(const std::string & map_filepath);
+
+  /// Clear the entire costmap.
+  void clearallCostmaps();
+
+  /// Clear the local costmap.
+  void clearLocalCostmap();
+
+  /// Clear the global costmap.
+  void clearGlobalCostmap();
+
+  /// Get local costmap.
+  Costmap getLocalCostmap();
+
+  /// Get global costmap.
+  Costmap getGlobalCostmap();
 
 private:
   rclcpp::Node::SharedPtr node_;

@@ -477,4 +477,148 @@ bool Navigator::runAction(
   return true;
 }
 
+void Navigator::changeMap(const std::string & map_filepath)
+{
+  // Create a service client for the change_map service
+  auto load_map_client = node_->create_client<LoadMap>("map_server/load_map");
+
+  // Wait for the service to be available
+  if (!load_map_client->wait_for_service(std::chrono::seconds(5))) {
+    RCLCPP_ERROR(node_->get_logger(), "Service 'map_server/load_map' not available");
+    return;
+  }
+
+  // Create a request to change the map
+  auto request = std::make_shared<LoadMap::Request>();
+  request->map_url = map_filepath;
+
+  // Send the request and wait for the response synchronously
+  auto future = load_map_client->async_send_request(request);
+  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+    //  Retrieve the response
+    auto response = future.get();
+
+    // Check if the response is successful
+    if (response->result != LoadMap::Response::RESULT_SUCCESS) {
+      RCLCPP_ERROR(node_->get_logger(), "Change map request failed!");
+    } else {
+      RCLCPP_INFO(node_->get_logger(), "Change map was successful!");
+    }
+  } else {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to call map_server/load_map service");
+  }
+}
+
+void Navigator::clearallCostmaps()
+{
+  clearLocalCostmap();
+  clearGlobalCostmap();
+}
+
+void Navigator::clearLocalCostmap()
+{
+  // Create a service client for the clear_local_costmap service
+  auto local_costmap_client =
+    node_->create_client<ClearEntireCostmap>("local_costmap/clear_entirely_local_costmap");
+
+  // Wait for the service to be available
+  if (!local_costmap_client->wait_for_service(std::chrono::seconds(5))) {
+    RCLCPP_ERROR(
+      node_->get_logger(), "Service 'local_costmap/clear_entirely_local_costmap' not available");
+    return;
+  }
+
+  // Create a request to clear the local costmap
+  auto request = std::make_shared<ClearEntireCostmap::Request>();
+
+  // Send the request and wait for the response synchronously
+  auto future = local_costmap_client->async_send_request(request);
+  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+    RCLCPP_INFO(node_->get_logger(), "Local costmap cleared successfully!");
+  } else {
+    RCLCPP_ERROR(
+      node_->get_logger(), "Failed to call local_costmap/clear_entirely_local_costmap service");
+  }
+}
+
+void Navigator::clearGlobalCostmap()
+{
+  // Create a service client for the clear_global_costmap service
+  auto global_costmap_client =
+    node_->create_client<ClearEntireCostmap>("global_costmap/clear_entirely_global_costmap");
+
+  // Wait for the service to be available
+  if (!global_costmap_client->wait_for_service(std::chrono::seconds(5))) {
+    RCLCPP_ERROR(
+      node_->get_logger(), "Service 'global_costmap/clear_entirely_global_costmap' not available");
+    return;
+  }
+
+  // Create a request to clear the global costmap
+  auto request = std::make_shared<ClearEntireCostmap::Request>();
+
+  // Send the request and wait for the response synchronously
+  auto future = global_costmap_client->async_send_request(request);
+  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+    RCLCPP_INFO(node_->get_logger(), "Global costmap cleared successfully!");
+  } else {
+    RCLCPP_ERROR(
+      node_->get_logger(), "Failed to call global_costmap/clear_entirely_global_costmap service");
+  }
+}
+
+Navigator::Costmap Navigator::getLocalCostmap()
+{
+  // Create a service client for the get_costmap service
+  auto local_costmap_client = node_->create_client<GetCostmap>("local_costmap/get_costmap");
+
+  // Wait for the service to be available
+  if (!local_costmap_client->wait_for_service(std::chrono::seconds(5))) {
+    RCLCPP_ERROR(node_->get_logger(), "Service 'local_costmap/get_costmap' not available");
+    return Costmap();
+  }
+
+  // Create a request to get the costmap
+  auto request = std::make_shared<GetCostmap::Request>();
+
+  // Send the request and wait for the response synchronously
+  auto future = local_costmap_client->async_send_request(request);
+  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+    // Retrieve the response
+    auto response = future.get();
+
+    // return the costmap
+    return response->map;
+  } else {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to call local_costmap/get_costmap service");
+  }
+}
+
+Navigator::Costmap Navigator::getGlobalCostmap()
+{
+  // Create a service client for the get_costmap service
+  auto global_costmap_client = node_->create_client<GetCostmap>("global_costmap/get_costmap");
+
+  // Wait for the service to be available
+  if (!global_costmap_client->wait_for_service(std::chrono::seconds(5))) {
+    RCLCPP_ERROR(node_->get_logger(), "Service 'global_costmap/get_costmap' not available");
+    return Costmap();
+  }
+
+  // Create a request to get the costmap
+  auto request = std::make_shared<GetCostmap::Request>();
+
+  // Send the request and wait for the response synchronously
+  auto future = global_costmap_client->async_send_request(request);
+  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+    // Retrieve the response
+    auto response = future.get();
+
+    // return the costmap
+    return response->map;
+  } else {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to call global_costmap/get_costmap service");
+  }
+}
+
 }  // namespace Nav2SimpleCommander

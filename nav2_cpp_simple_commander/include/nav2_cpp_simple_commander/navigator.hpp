@@ -24,10 +24,10 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav2_msgs/action/smooth_path.hpp"
 #include "nav2_msgs/action/spin.hpp"
-#include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "nav2_msgs/srv/clear_entire_costmap.hpp"
 #include "nav2_msgs/srv/get_costmap.hpp"
 #include "nav2_msgs/srv/load_map.hpp"
+#include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/client.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -173,6 +173,12 @@ private:
     const std::string & action_name, const typename ActionT::Goal & goal,
     std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb =
       nullptr);
+
+  /// Call a service and return the response.
+  template <typename ServiceT>
+  typename ServiceT::Response::SharedPtr callService(
+    const std::string & service_name, typename ServiceT::Request::SharedPtr request,
+    std::chrono::seconds timeout = std::chrono::seconds(5));
 };
 
 void publishInitialPose();

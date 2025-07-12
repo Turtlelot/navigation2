@@ -227,29 +227,25 @@ void Navigator::waitForInitialPose()
 
 void Navigator::waitForNodeToActivate(const std::string & node_name)
 {
-  using GetState = lifecycle_msgs::srv::GetState;
-  auto client = node_->create_client<GetState>(node_name + "/get_state");
-
   RCLCPP_INFO(node_->get_logger(), "Waiting for '%s' to become active...", node_name.c_str());
 
-  while (!client->wait_for_service(std::chrono::seconds(1))) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Service '%s/get_state' not available, waiting...", node_name.c_str());
-  }
-
-  auto request = std::make_shared<GetState::Request>();
+  // Loop until the node state is "active"
+  rclcpp::Rate rate(0.5);
   std::string state = "unknown";
-
-  rclcpp::Rate rate(0.5);  //delay 2 sec between each eteration
+  std::string service_name = node_name + "/get_state";
 
   while (rclcpp::ok() && state != "active") {
-    auto future = client->async_send_request(request);
-    if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-      state = future.get()->current_state.label;
+    auto request = std::make_shared<lifecycle_msgs::srv::GetState::Request>();
+    auto response =
+      callService<lifecycle_msgs::srv::GetState>(service_name, request, std::chrono::seconds(1));
+
+    if (response) {
+      state = response->current_state.label;
       RCLCPP_DEBUG(
         node_->get_logger(), "Current state of '%s': %s", node_name.c_str(), state.c_str());
     } else {
-      RCLCPP_WARN(node_->get_logger(), "Failed to get state for node '%s'", node_name.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(), "Service '%s' not available yet, retrying...", service_name.c_str());
     }
 
     rate.sleep();
@@ -274,115 +270,6 @@ void Navigator::waitUntilNav2Active(const std::string & navigator, const std::st
   RCLCPP_INFO(node_->get_logger(), "Nav2 is now active and ready.");
 }
 
-void Navigator::lifecycleStartup()
-{
-  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
-  RCLCPP_INFO(node_->get_logger(), "Starting up lifecycle nodes based on lifecycle_manager.");
-  // Get all services
-  std::map<std::string, std::vector<std::string>> services_and_types =
-    node_->get_service_names_and_types();
-
-  bool found_lifecycle_service = false;
-  for (const auto & service : services_and_types) {
-    const auto & service_name = service.first;
-    const auto & service_type = service.second[0];
-
-    //check for /lifecycle_manager_localization/manage_nodes and /lifecycle_manager_navigation/manage_nodes
-
-    if (service_type == "nav2_msgs/srv/ManageLifecycleNodes") {
-      found_lifecycle_service = true;
-      // Create client
-      auto client = node_->create_client<ManageLifecycleNodes>(service_name);
-
-      // Wait for service
-      // TODO timeout configure
-      while (!client->wait_for_service(std::chrono::seconds(1))) {
-        RCLCPP_INFO(
-          node_->get_logger(), "Service '%s' not available, waiting...", service_name.c_str());
-      }
-
-      //prepare request
-      auto request = std::make_shared<ManageLifecycleNodes::Request>();
-      request->command = ManageLifecycleNodes::Request::STARTUP;
-
-      // Send async request
-      auto future = client->async_send_request(request);
-
-      // Wait for result, retry if needed
-      while (rclcpp::ok()) {
-        // TODO timeout configure
-        if (
-          rclcpp::spin_until_future_complete(node_, future, std::chrono::milliseconds(100)) ==
-          rclcpp::FutureReturnCode::SUCCESS) {
-          break;  // success
-        } else {
-          RCLCPP_WARN(
-            node_->get_logger(), "Retrying lifecycle startup on service '%s'...",
-            service_name.c_str());
-          waitForInitialPose();  // fallback in case system not ready
-        }
-      }
-    }
-  }
-  if (found_lifecycle_service) {
-    RCLCPP_INFO(node_->get_logger(), "Nav2 is ready for use!");
-  } else {
-    RCLCPP_WARN(node_->get_logger(), "No Nav2 lifecycle services found. Is Nav2 launched?");
-  }
-}
-
-void Navigator::lifecycleShutdown()
-{
-  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
-
-  RCLCPP_INFO(node_->get_logger(), "Shutting down lifecycle nodes based on lifecycle_manager.");
-
-  // Get all available services and their types
-  auto services_and_types = node_->get_service_names_and_types();
-
-  for (const auto & service : services_and_types) {
-    const auto service_name = service.first;
-    const auto service_type = service.second[0];
-
-    if (service_type == "nav2_msgs/srv/ManageLifecycleNodes") {
-      RCLCPP_INFO(node_->get_logger(), "Shutting down service: %s", service_name.c_str());
-
-      // Create client for ManageLifecycleNodes
-      auto client = node_->create_client<ManageLifecycleNodes>(service_name);
-
-      // Wait for the service to be available
-      while (!client->wait_for_service(std::chrono::seconds(1))) {
-        RCLCPP_INFO(
-          node_->get_logger(), "Service '%s' not available, waiting...", service_name.c_str());
-      }
-
-      // Create shutdown request
-      auto request = std::make_shared<ManageLifecycleNodes::Request>();
-      request->command = ManageLifecycleNodes::Request::SHUTDOWN;
-
-      // Send async request and wait for it to complete
-      auto future = client->async_send_request(request);
-      if (
-        rclcpp::spin_until_future_complete(node_, future, std::chrono::seconds(5)) ==
-        rclcpp::FutureReturnCode::SUCCESS) {
-        auto response = future.get();
-        if (response->success) {
-          RCLCPP_INFO(
-            node_->get_logger(), "Successfully shut down node via '%s'", service_name.c_str());
-        } else {
-          RCLCPP_WARN(
-            node_->get_logger(), "Shutdown request to '%s' returned failure", service_name.c_str());
-        }
-      } else {
-        RCLCPP_ERROR(
-          node_->get_logger(), "Failed to receive response from '%s'", service_name.c_str());
-      }
-    }
-    //TODO check result and add even more logging
-  }
-
-  RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
-}
 template <typename ActionT>
 bool Navigator::runAction(
   const std::string & action_name, const typename ActionT::Goal & goal,
@@ -479,33 +366,16 @@ bool Navigator::runAction(
 
 void Navigator::changeMap(const std::string & map_filepath)
 {
-  // Create a service client for the change_map service
-  auto load_map_client = node_->create_client<LoadMap>("map_server/load_map");
-
-  // Wait for the service to be available
-  if (!load_map_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Service 'map_server/load_map' not available");
-    return;
-  }
-
-  // Create a request to change the map
+  // Create a request to load the map
   auto request = std::make_shared<LoadMap::Request>();
   request->map_url = map_filepath;
 
-  // Send the request and wait for the response synchronously
-  auto future = load_map_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    //  Retrieve the response
-    auto response = future.get();
+  auto response = callService<LoadMap>("map_server/load_map", request);
 
-    // Check if the response is successful
-    if (response->result != LoadMap::Response::RESULT_SUCCESS) {
-      RCLCPP_ERROR(node_->get_logger(), "Change map request failed!");
-    } else {
-      RCLCPP_INFO(node_->get_logger(), "Change map was successful!");
-    }
+  if (response && response->result == LoadMap::Response::RESULT_SUCCESS) {
+    RCLCPP_INFO(node_->get_logger(), "Change map was successful!");
   } else {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to call map_server/load_map service");
+    RCLCPP_ERROR(node_->get_logger(), "Change map request failed!");
   }
 }
 
@@ -517,107 +387,185 @@ void Navigator::clearallCostmaps()
 
 void Navigator::clearLocalCostmap()
 {
-  // Create a service client for the clear_local_costmap service
-  auto local_costmap_client =
-    node_->create_client<ClearEntireCostmap>("local_costmap/clear_entirely_local_costmap");
-
-  // Wait for the service to be available
-  if (!local_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Service 'local_costmap/clear_entirely_local_costmap' not available");
-    return;
-  }
-
   // Create a request to clear the local costmap
   auto request = std::make_shared<ClearEntireCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = local_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+  auto response =
+    callService<ClearEntireCostmap>("local_costmap/clear_entirely_local_costmap", request);
+
+  if (response) {
     RCLCPP_INFO(node_->get_logger(), "Local costmap cleared successfully!");
   } else {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Failed to call local_costmap/clear_entirely_local_costmap service");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to clear local costmap");
   }
 }
 
 void Navigator::clearGlobalCostmap()
 {
-  // Create a service client for the clear_global_costmap service
-  auto global_costmap_client =
-    node_->create_client<ClearEntireCostmap>("global_costmap/clear_entirely_global_costmap");
-
-  // Wait for the service to be available
-  if (!global_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Service 'global_costmap/clear_entirely_global_costmap' not available");
-    return;
-  }
-
   // Create a request to clear the global costmap
   auto request = std::make_shared<ClearEntireCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = global_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+  auto response =
+    callService<ClearEntireCostmap>("global_costmap/clear_entirely_global_costmap", request);
+  if (response) {
     RCLCPP_INFO(node_->get_logger(), "Global costmap cleared successfully!");
   } else {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Failed to call global_costmap/clear_entirely_global_costmap service");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to clear global costmap");
   }
 }
 
 Navigator::Costmap Navigator::getLocalCostmap()
 {
-  // Create a service client for the get_costmap service
-  auto local_costmap_client = node_->create_client<GetCostmap>("local_costmap/get_costmap");
-
-  // Wait for the service to be available
-  if (!local_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Service 'local_costmap/get_costmap' not available");
-    return Costmap();
-  }
-
   // Create a request to get the costmap
   auto request = std::make_shared<GetCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = local_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    // Retrieve the response
-    auto response = future.get();
-
+  auto response = callService<GetCostmap>("local_costmap/get_costmap", request);
+  if (response) {
+    RCLCPP_INFO(node_->get_logger(), "Local costmap retrieved successfully!");
     // return the costmap
     return response->map;
   } else {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to call local_costmap/get_costmap service");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to get local costmap");
+    return Costmap();
   }
 }
 
 Navigator::Costmap Navigator::getGlobalCostmap()
 {
-  // Create a service client for the get_costmap service
-  auto global_costmap_client = node_->create_client<GetCostmap>("global_costmap/get_costmap");
-
-  // Wait for the service to be available
-  if (!global_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Service 'global_costmap/get_costmap' not available");
-    return Costmap();
-  }
-
   // Create a request to get the costmap
   auto request = std::make_shared<GetCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = global_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    // Retrieve the response
-    auto response = future.get();
-
+  auto response = callService<GetCostmap>("global_costmap/get_costmap", request);
+  if (response) {
+    RCLCPP_INFO(node_->get_logger(), "Global costmap retrieved successfully!");
     // return the costmap
     return response->map;
   } else {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to call global_costmap/get_costmap service");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to get global costmap");
+    return Costmap();
+  }
+}
+
+void Navigator::lifecycleStartup()
+{
+  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
+
+  RCLCPP_INFO(node_->get_logger(), "Starting up lifecycle nodes based on lifecycle_manager...");
+
+  // Get all services in the system
+  std::map<std::string, std::vector<std::string>> services_and_types =
+    node_->get_service_names_and_types();
+
+  bool found_lifecycle_service = false;
+
+  for (const auto & service : services_and_types) {
+    const auto & service_name = service.first;
+    const auto & service_type = service.second[0];
+
+    if (service_type != "nav2_msgs/srv/ManageLifecycleNodes") {
+      RCLCPP_DEBUG(
+        node_->get_logger(), "Skipping service '%s' of type '%s'", service_name.c_str(),
+        service_type.c_str());
+
+      // Skip services that are not ManageLifecycleNodes
+      continue;
+    }
+
+    // Found a lifecycle service
+
+    found_lifecycle_service = true;
+
+    auto request = std::make_shared<ManageLifecycleNodes::Request>();
+    request->command = ManageLifecycleNodes::Request::STARTUP;
+
+    RCLCPP_INFO(node_->get_logger(), "Calling lifecycle service: %s", service_name.c_str());
+
+    // Retry logic using callService
+    while (rclcpp::ok()) {
+      auto response =
+        callService<ManageLifecycleNodes>(service_name, request, std::chrono::seconds(1));
+
+      if (response) {
+        break;
+      } else {
+        RCLCPP_WARN(
+          node_->get_logger(), "Retrying lifecycle startup on service: %s", service_name.c_str());
+        waitForInitialPose();  // fallback to ensure pose is available
+      }
+    }
+  }
+
+  if (found_lifecycle_service) {
+    RCLCPP_INFO(node_->get_logger(), "Nav2 is ready for use!");
+  } else {
+    RCLCPP_WARN(node_->get_logger(), "No Nav2 lifecycle services found. Is Nav2 launched?");
+  }
+}
+
+void Navigator::lifecycleShutdown()
+{
+  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
+
+  RCLCPP_INFO(node_->get_logger(), "Shutting down lifecycle nodes based on lifecycle_manager...");
+
+  // Get all available services and their types
+  auto services_and_types = node_->get_service_names_and_types();
+
+  for (const auto & service : services_and_types) {
+    const std::string & service_name = service.first;
+    const std::string & service_type = service.second[0];
+
+    if (service_type != "nav2_msgs/srv/ManageLifecycleNodes") {
+      RCLCPP_DEBUG(
+        node_->get_logger(), "Skipping service '%s' of type '%s'", service_name.c_str(),
+        service_type.c_str());
+
+      // Skip services that are not ManageLifecycleNodes
+      continue;
+    }
+    RCLCPP_INFO(node_->get_logger(), "Sending shutdown to service: %s", service_name.c_str());
+
+    auto request = std::make_shared<ManageLifecycleNodes::Request>();
+    request->command = ManageLifecycleNodes::Request::SHUTDOWN;
+
+    auto response =
+      callService<ManageLifecycleNodes>(service_name, request, std::chrono::seconds(5));
+
+    if (response) {
+      if (response->success) {
+        RCLCPP_INFO(
+          node_->get_logger(), "Successfully shut down node via '%s'", service_name.c_str());
+      } else {
+        RCLCPP_WARN(
+          node_->get_logger(), "Shutdown request to '%s' returned failure", service_name.c_str());
+      }
+    } else {
+      RCLCPP_ERROR(
+        node_->get_logger(), "Failed to receive response from '%s'", service_name.c_str());
+    }
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
+}
+
+template <typename ServiceT>
+typename ServiceT::Response::SharedPtr Navigator::callService(
+  const std::string & service_name, typename ServiceT::Request::SharedPtr request,
+  std::chrono::seconds timeout)
+{
+  auto client = node_->create_client<ServiceT>(service_name);
+
+  if (!client->wait_for_service(timeout)) {
+    RCLCPP_ERROR(node_->get_logger(), "Service '%s' not available", service_name.c_str());
+    return nullptr;
+  }
+
+  auto future = client->async_send_request(request);
+  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
+    return future.get();
+  } else {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to call service '%s'", service_name.c_str());
+    return nullptr;
   }
 }
 

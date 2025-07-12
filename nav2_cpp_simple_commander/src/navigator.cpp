@@ -383,6 +383,25 @@ void Navigator::lifecycleShutdown()
 
   RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
 }
+
+void Navigator::cancelTask()
+{
+  if (action_handle_) {
+    RCLCPP_INFO(node_->get_logger(), "Canceling current task");
+    action_handle_->cancel(node_);
+  } else {
+    RCLCPP_WARN(node_->get_logger(), "No task to cancel");
+  }
+}
+
+bool Navigator::isTaskComplete()
+{
+  if (!action_handle_) {
+    return true;
+  }
+  return action_handle_->isDone(node_);
+}
+
 template <typename ActionT>
 bool Navigator::runAction(
   const std::string & action_name, const typename ActionT::Goal & goal,
@@ -403,18 +422,15 @@ bool Navigator::runAction(
 
   // prepare send_goal options
   typename ClientT::SendGoalOptions send_goal_options;
-  rclcpp::Time last_feedback_time = node_->now();
+  last_feedback_time_ = node_->now();  // Reset for each new goal
 
   send_goal_options.feedback_callback =
-    [this, &feedback_cb, last_feedback_time](
+    [this, feedback_cb](
       typename GoalHandleT::SharedPtr,
-      const std::shared_ptr<const typename ActionT::Feedback>
-        feedback) mutable {  // modify captured-by-value variables (update the value only not the original var
+      const std::shared_ptr<const typename ActionT::Feedback> feedback) mutable {
       rclcpp::Time now = node_->now();
-      // feedback every 2 seconds to reduce callback frequency
-      if ((now - last_feedback_time).seconds() >= 2.0) {
-        last_feedback_time = now;
-
+      if ((now - last_feedback_time_).seconds() >= 2.0) {
+        last_feedback_time_ = now;
         if (feedback_cb) {
           feedback_cb(feedback);
         }
@@ -465,14 +481,7 @@ bool Navigator::runAction(
     return false;
   }
 
-  // wait for result
-  auto result_future = client->async_get_result(goal_handle);
-  if (
-    rclcpp::spin_until_future_complete(node_, result_future) != rclcpp::FutureReturnCode::SUCCESS) {
-    RCLCPP_ERROR(node_->get_logger(), "get_result_async failed");
-    return false;
-  }
-
+  action_handle_ = std::make_shared<ActionHandleImpl<ActionT>>(client, goal_handle);
   // done! we ignore the actual result message here.
   return true;
 }

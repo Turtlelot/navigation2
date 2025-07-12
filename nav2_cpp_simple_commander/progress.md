@@ -1,3 +1,4 @@
+
 | #  | Category                     | Function Signature                                                                           | Description                          | Comment   | Responsible |
 | -- | ---------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------ | --------- | ----------- |
 | 1  | 🚀 Navigation (Action-based) | `goThroughPoses(self, poses, behavior_tree='')`                                            | Navigate through multiple poses      | ✅ Done   | -           |
@@ -54,7 +55,10 @@
 
 **Next**
 
+- create helper temp function for ca+lling the srv
+- cancel and istask complete
 - examples
 - feedback control
 - result cb
 - enum running task
+-

@@ -2,6 +2,7 @@
 #ifndef NAV2_SIMPLE_COMMANDER_CPP__NAVIGATOR_HPP_
 #define NAV2_SIMPLE_COMMANDER_CPP__NAVIGATOR_HPP_
 
+#include <any>
 #include <functional>
 #include <memory>
 #include <string>
@@ -12,6 +13,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "lifecycle_msgs/srv/get_state.hpp"
+#include "nav2_cpp_simple_commander/action_handle.hpp"
 #include "nav2_msgs/action/assisted_teleop.hpp"
 #include "nav2_msgs/action/back_up.hpp"
 #include "nav2_msgs/action/compute_path_through_poses.hpp"
@@ -24,13 +26,14 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav2_msgs/action/smooth_path.hpp"
 #include "nav2_msgs/action/spin.hpp"
-#include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "nav2_msgs/srv/clear_entire_costmap.hpp"
 #include "nav2_msgs/srv/get_costmap.hpp"
 #include "nav2_msgs/srv/load_map.hpp"
+#include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/client.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
 
 namespace Nav2SimpleCommander
 {
@@ -120,6 +123,12 @@ public:
 
   // Shutdown nav2 lifecycle-managed nodes
   void lifecycleShutdown();
+
+  bool isTaskComplete();
+  
+  // Cancel the currently active task (goal)
+  void cancelTask();
+
   /// Load a map from a file.
   void changeMap(const std::string & map_filepath);
 
@@ -152,6 +161,12 @@ private:
 
   // Subscriber to listen for pose feedback from AMCL
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr amcl_pose_sub_;
+
+  // Last time feedback was processed
+  rclcpp::Time last_feedback_time_;
+
+  // Handle to the currently running action
+  std::shared_ptr<IActionHandle> action_handle_;
 
   // Helper to publish the stored initial pose
   void publishInitialPose();

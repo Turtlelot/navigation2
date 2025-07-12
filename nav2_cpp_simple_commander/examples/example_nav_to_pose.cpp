@@ -16,6 +16,7 @@
 // lifecycleShutdown() – shutdown Nav2 nodes
 
 // get_clock() – get current ROS time
+
 #include <chrono>
 #include <memory>
 
@@ -40,12 +41,13 @@ int main(int argc, char ** argv)
   initial_pose.pose.pose.position.y = 0.0;
   initial_pose.pose.pose.orientation.w = 1.0;
 
-  navigator.setInitialPose(initial_pose);
+  // navigator.setInitialPose(initial_pose);
 
-  // Wait for nav2 stack to become active
-  navigator.waitUntilNav2Active();
+  // navigator.lifecycleStartup();
+  // // Wait for nav2 stack to become active
+  // navigator.waitUntilNav2Active();
 
-  // Define goal pose
+  // // Define goal pose
   geometry_msgs::msg::PoseStamped goal_pose;
   goal_pose.header.frame_id = "map";
   goal_pose.header.stamp = node->now();
@@ -53,11 +55,14 @@ int main(int argc, char ** argv)
   goal_pose.pose.position.y = -0.5;
   goal_pose.pose.orientation.w = 1.0;
 
-  // Send goal
+  // // Send goal
   navigator.goToPose(goal_pose);
 
+  rclcpp::sleep_for(std::chrono::seconds(3));
+  navigator.cancelTask();
 
   // navigator.lifecycleShutdown();
+
   rclcpp::shutdown();
   return 0;
 }

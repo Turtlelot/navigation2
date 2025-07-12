@@ -270,6 +270,108 @@ void Navigator::waitUntilNav2Active(const std::string & navigator, const std::st
   RCLCPP_INFO(node_->get_logger(), "Nav2 is now active and ready.");
 }
 
+void Navigator::lifecycleStartup()
+{
+  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
+
+  RCLCPP_INFO(node_->get_logger(), "Starting up lifecycle nodes based on lifecycle_manager...");
+
+  // Get all services in the system
+  std::map<std::string, std::vector<std::string>> services_and_types =
+    node_->get_service_names_and_types();
+
+  bool found_lifecycle_service = false;
+
+  for (const auto & service : services_and_types) {
+    const auto & service_name = service.first;
+    const auto & service_type = service.second[0];
+
+    if (service_type != "nav2_msgs/srv/ManageLifecycleNodes") {
+      RCLCPP_DEBUG(
+        node_->get_logger(), "Skipping service '%s' of type '%s'", service_name.c_str(),
+        service_type.c_str());
+
+      // Skip services that are not ManageLifecycleNodes
+      continue;
+    }
+
+    // Found a lifecycle service
+
+    found_lifecycle_service = true;
+
+    auto request = std::make_shared<ManageLifecycleNodes::Request>();
+    request->command = ManageLifecycleNodes::Request::STARTUP;
+
+    RCLCPP_INFO(node_->get_logger(), "Calling lifecycle service: %s", service_name.c_str());
+
+    // Retry logic using callService
+    while (rclcpp::ok()) {
+      auto response =
+        callService<ManageLifecycleNodes>(service_name, request, std::chrono::seconds(1));
+
+      if (response) {
+        break;
+      } else {
+        RCLCPP_WARN(
+          node_->get_logger(), "Retrying lifecycle startup on service: %s", service_name.c_str());
+        waitForInitialPose();  // fallback to ensure pose is available
+      }
+    }
+  }
+
+  if (found_lifecycle_service) {
+    RCLCPP_INFO(node_->get_logger(), "Nav2 is ready for use!");
+  } else {
+    RCLCPP_WARN(node_->get_logger(), "No Nav2 lifecycle services found. Is Nav2 launched?");
+  }
+}
+
+void Navigator::lifecycleShutdown()
+{
+  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
+
+  RCLCPP_INFO(node_->get_logger(), "Shutting down lifecycle nodes based on lifecycle_manager...");
+
+  // Get all available services and their types
+  auto services_and_types = node_->get_service_names_and_types();
+
+  for (const auto & service : services_and_types) {
+    const std::string & service_name = service.first;
+    const std::string & service_type = service.second[0];
+
+    if (service_type != "nav2_msgs/srv/ManageLifecycleNodes") {
+      RCLCPP_DEBUG(
+        node_->get_logger(), "Skipping service '%s' of type '%s'", service_name.c_str(),
+        service_type.c_str());
+
+      // Skip services that are not ManageLifecycleNodes
+      continue;
+    }
+    RCLCPP_INFO(node_->get_logger(), "Sending shutdown to service: %s", service_name.c_str());
+
+    auto request = std::make_shared<ManageLifecycleNodes::Request>();
+    request->command = ManageLifecycleNodes::Request::SHUTDOWN;
+
+    auto response =
+      callService<ManageLifecycleNodes>(service_name, request, std::chrono::seconds(5));
+
+    if (response) {
+      if (response->success) {
+        RCLCPP_INFO(
+          node_->get_logger(), "Successfully shut down node via '%s'", service_name.c_str());
+      } else {
+        RCLCPP_WARN(
+          node_->get_logger(), "Shutdown request to '%s' returned failure", service_name.c_str());
+      }
+    } else {
+      RCLCPP_ERROR(
+        node_->get_logger(), "Failed to receive response from '%s'", service_name.c_str());
+    }
+  }
+
+  RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
+}
+
 template <typename ActionT>
 bool Navigator::runAction(
   const std::string & action_name, const typename ActionT::Goal & goal,
@@ -444,108 +546,6 @@ Navigator::Costmap Navigator::getGlobalCostmap()
     RCLCPP_ERROR(node_->get_logger(), "Failed to get global costmap");
     return Costmap();
   }
-}
-
-void Navigator::lifecycleStartup()
-{
-  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
-
-  RCLCPP_INFO(node_->get_logger(), "Starting up lifecycle nodes based on lifecycle_manager...");
-
-  // Get all services in the system
-  std::map<std::string, std::vector<std::string>> services_and_types =
-    node_->get_service_names_and_types();
-
-  bool found_lifecycle_service = false;
-
-  for (const auto & service : services_and_types) {
-    const auto & service_name = service.first;
-    const auto & service_type = service.second[0];
-
-    if (service_type != "nav2_msgs/srv/ManageLifecycleNodes") {
-      RCLCPP_DEBUG(
-        node_->get_logger(), "Skipping service '%s' of type '%s'", service_name.c_str(),
-        service_type.c_str());
-
-      // Skip services that are not ManageLifecycleNodes
-      continue;
-    }
-
-    // Found a lifecycle service
-
-    found_lifecycle_service = true;
-
-    auto request = std::make_shared<ManageLifecycleNodes::Request>();
-    request->command = ManageLifecycleNodes::Request::STARTUP;
-
-    RCLCPP_INFO(node_->get_logger(), "Calling lifecycle service: %s", service_name.c_str());
-
-    // Retry logic using callService
-    while (rclcpp::ok()) {
-      auto response =
-        callService<ManageLifecycleNodes>(service_name, request, std::chrono::seconds(1));
-
-      if (response) {
-        break;
-      } else {
-        RCLCPP_WARN(
-          node_->get_logger(), "Retrying lifecycle startup on service: %s", service_name.c_str());
-        waitForInitialPose();  // fallback to ensure pose is available
-      }
-    }
-  }
-
-  if (found_lifecycle_service) {
-    RCLCPP_INFO(node_->get_logger(), "Nav2 is ready for use!");
-  } else {
-    RCLCPP_WARN(node_->get_logger(), "No Nav2 lifecycle services found. Is Nav2 launched?");
-  }
-}
-
-void Navigator::lifecycleShutdown()
-{
-  using ManageLifecycleNodes = nav2_msgs::srv::ManageLifecycleNodes;
-
-  RCLCPP_INFO(node_->get_logger(), "Shutting down lifecycle nodes based on lifecycle_manager...");
-
-  // Get all available services and their types
-  auto services_and_types = node_->get_service_names_and_types();
-
-  for (const auto & service : services_and_types) {
-    const std::string & service_name = service.first;
-    const std::string & service_type = service.second[0];
-
-    if (service_type != "nav2_msgs/srv/ManageLifecycleNodes") {
-      RCLCPP_DEBUG(
-        node_->get_logger(), "Skipping service '%s' of type '%s'", service_name.c_str(),
-        service_type.c_str());
-
-      // Skip services that are not ManageLifecycleNodes
-      continue;
-    }
-    RCLCPP_INFO(node_->get_logger(), "Sending shutdown to service: %s", service_name.c_str());
-
-    auto request = std::make_shared<ManageLifecycleNodes::Request>();
-    request->command = ManageLifecycleNodes::Request::SHUTDOWN;
-
-    auto response =
-      callService<ManageLifecycleNodes>(service_name, request, std::chrono::seconds(5));
-
-    if (response) {
-      if (response->success) {
-        RCLCPP_INFO(
-          node_->get_logger(), "Successfully shut down node via '%s'", service_name.c_str());
-      } else {
-        RCLCPP_WARN(
-          node_->get_logger(), "Shutdown request to '%s' returned failure", service_name.c_str());
-      }
-    } else {
-      RCLCPP_ERROR(
-        node_->get_logger(), "Failed to receive response from '%s'", service_name.c_str());
-    }
-  }
-
-  RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
 }
 
 template <typename ServiceT>

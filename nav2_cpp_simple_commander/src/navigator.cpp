@@ -429,6 +429,15 @@ bool Navigator::runAction(
       typename GoalHandleT::SharedPtr,
       const std::shared_ptr<const typename ActionT::Feedback> feedback) mutable {
       rclcpp::Time now = node_->now();
+      //store feedback
+      if (action_handle_) {
+        // Cast to specific action handle type to access type-specific methods (like getFeedback() or getResult())
+        auto handle = std::dynamic_pointer_cast<ActionHandleImpl<ActionT>>(action_handle_);
+        //confirm that the cast doesnot fail (in case of wrong action type)
+        if (handle) {
+          handle->setFeedback(feedback);
+        }
+      }
       if ((now - last_feedback_time_).seconds() >= 2.0) {
         last_feedback_time_ = now;
         if (feedback_cb) {
@@ -449,16 +458,16 @@ bool Navigator::runAction(
   send_goal_options.result_callback = [&](const typename GoalHandleT::WrappedResult & result) {
     switch (result.code) {
       case rclcpp_action::ResultCode::SUCCEEDED:
-        RCLCPP_INFO(node_->get_logger(), "Goal completed successfully");
+        // RCLCPP_INFO(node_->get_logger(), "Goal completed successfully");
         break;
       case rclcpp_action::ResultCode::ABORTED:
-        RCLCPP_ERROR(node_->get_logger(), "Goal was aborted");
+        // RCLCPP_ERROR(node_->get_logger(), "Goal was aborted");
         break;
       case rclcpp_action::ResultCode::CANCELED:
-        RCLCPP_ERROR(node_->get_logger(), "Goal was canceled");
+        // RCLCPP_ERROR(node_->get_logger(), "Goal was canceled");
         break;
       default:
-        RCLCPP_ERROR(node_->get_logger(), "Unknown result code");
+        // RCLCPP_ERROR(node_->get_logger(), "Unknown result code");
         break;
     }
   };
@@ -484,6 +493,26 @@ bool Navigator::runAction(
   action_handle_ = std::make_shared<ActionHandleImpl<ActionT>>(client, goal_handle);
   // done! we ignore the actual result message here.
   return true;
+}
+
+Navigator::TaskResult Navigator::getTaskResult()
+{
+  if (!action_handle_) {
+    RCLCPP_WARN(node_->get_logger(), "No active action handle.");
+    return TaskResult::UNKNOWN;
+  }
+
+  auto result_code = action_handle_->getWrappedResultCode(node_);
+  switch (result_code) {
+    case rclcpp_action::ResultCode::SUCCEEDED:
+      return TaskResult::SUCCEEDED;
+    case rclcpp_action::ResultCode::CANCELED:
+      return TaskResult::CANCELED;
+    case rclcpp_action::ResultCode::ABORTED:
+      return TaskResult::FAILED;
+    default:
+      return TaskResult::UNKNOWN;
+  }
 }
 
 void Navigator::changeMap(const std::string & map_filepath)

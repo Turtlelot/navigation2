@@ -125,9 +125,20 @@ public:
   void lifecycleShutdown();
 
   bool isTaskComplete();
-  
+
   // Cancel the currently active task (goal)
   void cancelTask();
+
+  // Get the latest feedback for the currently running action
+  template <typename ActionT>
+  std::shared_ptr<const typename ActionT::Feedback> getFeedback();
+
+  // // Get the result for the currently running action
+  template <typename ActionT>
+  typename rclcpp_action::ClientGoalHandle<ActionT>::Result::SharedPtr getResult();
+
+  enum class TaskResult { UNKNOWN = 0, SUCCEEDED = 1, CANCELED = 2, FAILED = 3 };
+  TaskResult getTaskResult();
 
   /// Load a map from a file.
   void changeMap(const std::string & map_filepath);
@@ -191,6 +202,44 @@ private:
 };
 
 void publishInitialPose();
+
+// -----------------------------
+// Templated implementations
+// -----------------------------
+
+template <typename ActionT>
+std::shared_ptr<const typename ActionT::Feedback> Navigator::getFeedback()
+{
+  if (!action_handle_) {
+    RCLCPP_WARN(node_->get_logger(), "No active action handle to get feedback.");
+    return nullptr;
+  }
+
+  auto handle = std::dynamic_pointer_cast<ActionHandleImpl<ActionT>>(action_handle_);
+  if (!handle) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to cast action handle to expected type.");
+    return nullptr;
+  }
+
+  return handle->getFeedback();
+}
+
+template <typename ActionT>
+typename rclcpp_action::ClientGoalHandle<ActionT>::Result::SharedPtr Navigator::getResult()
+{
+  if (!action_handle_) {
+    RCLCPP_WARN(node_->get_logger(), "No active action handle to get result.");
+    return nullptr;
+  }
+
+  auto handle = std::dynamic_pointer_cast<ActionHandleImpl<ActionT>>(action_handle_);
+  if (!handle) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to cast action handle to expected type.");
+    return nullptr;
+  }
+
+  return handle->getResult(node_);
+}
 
 }  // namespace Nav2SimpleCommander
 

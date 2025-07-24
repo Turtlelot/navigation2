@@ -71,6 +71,26 @@ install(TARGETS example_nav_to_pose
   DESTINATION lib/${PROJECT_NAME}
 )
 
+## Add the executable for examples 
+add_executable(go_through_poses_demo
+  examples/example_nav_through_poses.cpp
+  src/navigator.cpp
+)
 
+# Link dependencies to the executable
+ament_target_dependencies(go_through_poses_demo
+  rclcpp
+  rclcpp_action
+  nav2_msgs
+  geographic_msgs
+  geometry_msgs
+  lifecycle_msgs
+  action_msgs
+)
+
+# Install the test node
+install(TARGETS go_through_poses_demo
+  DESTINATION lib/${PROJECT_NAME}
+)
 # Package declaration
 ament_package()

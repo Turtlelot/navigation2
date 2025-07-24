@@ -16,6 +16,8 @@ public:
   virtual void cancel(const rclcpp::Node::SharedPtr & node) = 0;
   // Check if the action is done
   virtual bool isDone(const rclcpp::Node::SharedPtr & node) = 0;
+  // Returns the final result code (e.g., SUCCEEDED, CANCELED) after waiting for the action to finish
+  virtual rclcpp_action::ResultCode getWrappedResultCode(const rclcpp::Node::SharedPtr & node) = 0;
 };
 
 // Template implementation of IActionHandle
@@ -53,9 +55,7 @@ public:
       rclcpp::FutureReturnCode::SUCCESS) {
       auto result = result_future_.get();
       // Check if the result indicates the action was successfully canceled
-      if (result.code == rclcpp_action::ResultCode::CANCELED) {
-        RCLCPP_INFO(node->get_logger(), "Cancelled");
-      } else {
+      if (!(result.code == rclcpp_action::ResultCode::CANCELED)) {
         RCLCPP_INFO(
           node->get_logger(), "Action ended with code: %d and not canceled",
           static_cast<int>(result.code));
@@ -75,11 +75,53 @@ public:
       rclcpp::spin_until_future_complete(node, result_future_, std::chrono::milliseconds(100));
     return status == rclcpp::FutureReturnCode::SUCCESS;
   }
+  void setFeedback(std::shared_ptr<const typename ActionT::Feedback> feedback)
+  {
+    last_feedback_ = feedback;
+  }
+
+  std::shared_ptr<const typename ActionT::Feedback> getFeedback() const { return last_feedback_; }
+  typename GoalHandleT::Result::SharedPtr getResult(const rclcpp::Node::SharedPtr & node)
+  {
+    if (!result_future_.valid()) {
+      RCLCPP_WARN(node->get_logger(), "Result future is invalid.");
+      return nullptr;
+    }
+
+    auto status = rclcpp::spin_until_future_complete(node, result_future_);
+    if (status != rclcpp::FutureReturnCode::SUCCESS) {
+      RCLCPP_ERROR(node->get_logger(), "Failed to get result.");
+      return nullptr;
+    }
+
+    auto result = result_future_.get();
+    return result.result;
+  }
+
+  rclcpp_action::ResultCode getWrappedResultCode(const rclcpp::Node::SharedPtr & node) override
+  {
+    if (!result_future_.valid()) {
+      RCLCPP_WARN(node->get_logger(), "Result future is invalid.");
+      return rclcpp_action::ResultCode::UNKNOWN;
+    }
+
+    auto status = rclcpp::spin_until_future_complete(node, result_future_);
+    if (status != rclcpp::FutureReturnCode::SUCCESS) {
+      RCLCPP_ERROR(node->get_logger(), "Failed to get result.");
+      return rclcpp_action::ResultCode::UNKNOWN;
+    }
+
+    auto result = result_future_.get();
+    return result.code;
+  }
 
 private:
   typename ClientT::SharedPtr client_;
   std::shared_ptr<GoalHandleT> goal_handle_;
+  // Wrapped result is the code and result msg of the action
   std::shared_future<typename GoalHandleT::WrappedResult> result_future_;
+  // Last received feedback
+  std::shared_ptr<const typename ActionT::Feedback> last_feedback_;
 };
 
 }  // namespace Nav2SimpleCommander

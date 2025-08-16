@@ -178,6 +178,9 @@ private:
 
   // Handle to the currently running action
   std::shared_ptr<IActionHandle> action_handle_;
+  //without base class 
+  // std::shared_ptr<ActionHandle<NavigateToPose>> action_handle_;
+
 
   // Helper to publish the stored initial pose
   void publishInitialPose();
@@ -192,16 +195,9 @@ private:
   // Wait until a lifecycle node becomes active
   void waitForNodeToActivate(const std::string & node_name);
 
-  /// The single templated runner: waits for server, sends goal, spins for
-  /// result.
-  template <typename ActionT>
-  bool runAction(
-    const std::string & action_name, const typename ActionT::Goal & goal,
-    std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb =
-      nullptr);
+
 };
 
-void publishInitialPose();
 
 // -----------------------------
 // Templated implementations

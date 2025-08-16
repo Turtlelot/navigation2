@@ -24,10 +24,14 @@ bool Navigator::goToPose(
   NavigateToPose::Goal goal;
   goal.pose = pose;
 
-  auto feedback_cb = [this](const std::shared_ptr<const NavigateToPose::Feedback> feedback) {
-    RCLCPP_INFO(node_->get_logger(), "Remaining distance: %.2f", feedback->distance_remaining);
-  };
-  return runAction<NavigateToPose>("navigate_to_pose", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<NavigateToPose>>();
+  if (!handle->runAction(node_, "navigate_to_pose", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start NavigateToPose action.");
+    return false;
+  }
+
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::goThroughPoses(
@@ -37,13 +41,14 @@ bool Navigator::goThroughPoses(
   goal.poses = poses;
   goal.behavior_tree = behavior_tree;
 
-  auto feedback_cb = [this](const std::shared_ptr<const NavigateThroughPoses::Feedback> feedback) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Remaining distance: %.2f, Remaining poses: %d",
-      feedback->distance_remaining, feedback->number_of_poses_remaining);
-  };
+  auto handle = std::make_shared<ActionHandleImpl<NavigateThroughPoses>>();
+  if (!handle->runAction(node_, "navigate_through_poses", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start NavigateThroughPoses action.");
+    return false;
+  }
 
-  return runAction<NavigateThroughPoses>("navigate_through_poses", goal, feedback_cb);
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStamped> & poses)
@@ -51,12 +56,13 @@ bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStampe
   FollowWaypoints::Goal goal;
   goal.poses = poses;
 
-  auto feedback_cb = [this](const std::shared_ptr<const FollowWaypoints::Feedback> feedback) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Currently executing waypoint index: %d", feedback->current_waypoint);
-  };
-
-  return runAction<FollowWaypoints>("follow_waypoints", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<FollowWaypoints>>();
+  if (!handle->runAction(node_, "follow_waypoints", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start FollowWaypoints action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::followGpsWaypoints(const std::vector<GeoPose> & poses)
@@ -64,12 +70,13 @@ bool Navigator::followGpsWaypoints(const std::vector<GeoPose> & poses)
   FollowGPSWaypoints::Goal goal;
   goal.gps_poses = poses;
 
-  auto feedback_cb = [this](const std::shared_ptr<const FollowGPSWaypoints::Feedback> feedback) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Currently executing waypoint index: %d", feedback->current_waypoint);
-  };
-
-  return runAction<FollowGPSWaypoints>("follow_gps_waypoints", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<FollowGPSWaypoints>>();
+  if (!handle->runAction(node_, "follow_gps_waypoints", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start FollowGPSWaypoints action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 bool Navigator::spin(double spin_dist, double time_allowance)
 {
@@ -77,12 +84,13 @@ bool Navigator::spin(double spin_dist, double time_allowance)
   goal.target_yaw = spin_dist;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto feedback_cb = [this](const std::shared_ptr<const Spin::Feedback> feedback) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Angular distance traveled: %.2f", feedback->angular_distance_traveled);
-  };
-
-  return runAction<Spin>("spin", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<Spin>>();
+  if (!handle->runAction(node_, "spin", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start Spin action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::backup(double backup_dist, double backup_speed, double time_allowance)
@@ -98,8 +106,14 @@ bool Navigator::backup(double backup_dist, double backup_speed, double time_allo
   auto feedback_cb = [this](const std::shared_ptr<const BackUp::Feedback> feedback) {
     RCLCPP_INFO(node_->get_logger(), "Distance traveled: %.2f", feedback->distance_traveled);
   };
+  auto handle = std::make_shared<ActionHandleImpl<BackUp>>();
+  if (!handle->runAction(node_, "back_up", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start BackUp action.");
+    return false;
+  }
+  action_handle_ = handle;
 
-  return runAction<BackUp>("backup", goal, feedback_cb);
+  return true;
 }
 
 bool Navigator::driveOnHeading(double dist, double speed, double time_allowance)
@@ -111,11 +125,13 @@ bool Navigator::driveOnHeading(double dist, double speed, double time_allowance)
   goal.speed = speed;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto feedback_cb = [this](const std::shared_ptr<const DriveOnHeading::Feedback> feedback) {
-    RCLCPP_INFO(node_->get_logger(), "Distance traveled: %.2f", feedback->distance_traveled);
-  };
-
-  return runAction<DriveOnHeading>("drive_on_heading", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<DriveOnHeading>>();
+  if (!handle->runAction(node_, "drive_on_heading", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start DriveOnHeading action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::assistedTeleop(double time_allowance)
@@ -123,12 +139,13 @@ bool Navigator::assistedTeleop(double time_allowance)
   AssistedTeleop::Goal goal;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto feedback_cb = [this](const std::shared_ptr<const AssistedTeleop::Feedback> feedback) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Current teleop duration: %d seconds",
-      feedback->current_teleop_duration.sec);
-  };
-  return runAction<AssistedTeleop>("assisted_teleop", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<AssistedTeleop>>();
+  if (!handle->runAction(node_, "assisted_teleop", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start AssistedTeleop action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::followPath(
@@ -139,13 +156,13 @@ bool Navigator::followPath(
   goal.controller_id = controller_id;
   goal.goal_checker_id = goal_checker_id;
 
-  auto feedback_cb = [this](const std::shared_ptr<const FollowPath::Feedback> feedback) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Distance to goal: %.2f, Speed: %.2f", feedback->distance_to_goal,
-      feedback->speed);
-  };
-
-  return runAction<FollowPath>("follow_path", goal, feedback_cb);
+  auto handle = std::make_shared<ActionHandleImpl<FollowPath>>();
+  if (!handle->runAction(node_, "follow_path", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start FollowPath action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::getPath(
@@ -159,8 +176,13 @@ bool Navigator::getPath(
   goal.use_start = use_start;
 
   // No feedback callback for this action
-
-  return runAction<ComputePathToPose>("compute_path_to_pose", goal);
+  auto handle = std::make_shared<ActionHandleImpl<ComputePathToPose>>();
+  if (!handle->runAction(node_, "compute_path_to_pose", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start ComputePathToPose action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::getPathThroughPoses(
@@ -174,8 +196,13 @@ bool Navigator::getPathThroughPoses(
   goal.use_start = use_start;
 
   // No feedback callback for this action
-
-  return runAction<ComputePathThroughPoses>("compute_path_through_poses", goal);
+  auto handle = std::make_shared<ActionHandleImpl<ComputePathThroughPoses>>();
+  if (!handle->runAction(node_, "compute_path_through_poses", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start ComputePathThroughPoses action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 
 bool Navigator::smoothPath(
@@ -188,8 +215,13 @@ bool Navigator::smoothPath(
   goal.check_for_collisions = check_for_collision;
 
   // No feedback callback for this action
-
-  return runAction<SmoothPath>("smooth_path", goal);
+  auto handle = std::make_shared<ActionHandleImpl<SmoothPath>>();
+  if (!handle->runAction(node_, "smooth_path", goal)) {
+    RCLCPP_ERROR(node_->get_logger(), "Failed to start SmoothPath action.");
+    return false;
+  }
+  action_handle_ = handle;
+  return true;
 }
 void Navigator::publishInitialPose()
 {
@@ -400,99 +432,6 @@ bool Navigator::isTaskComplete()
     return true;
   }
   return action_handle_->isDone(node_);
-}
-
-template <typename ActionT>
-bool Navigator::runAction(
-  const std::string & action_name, const typename ActionT::Goal & goal,
-  std::function<void(const std::shared_ptr<const typename ActionT::Feedback>)> feedback_cb)
-{
-  using ClientT = rclcpp_action::Client<ActionT>;
-  using GoalHandleT = typename rclcpp_action::ClientGoalHandle<ActionT>;
-
-  // create action client
-  auto client = rclcpp_action::create_client<ActionT>(node_, action_name);
-
-  // wait for server
-  RCLCPP_INFO(node_->get_logger(), "Waiting for '%s' action server...", action_name.c_str());
-  if (!client->wait_for_action_server(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Action server '%s' not available", action_name.c_str());
-    return false;
-  }
-
-  // prepare send_goal options
-  typename ClientT::SendGoalOptions send_goal_options;
-  last_feedback_time_ = node_->now();  // Reset for each new goal
-
-  send_goal_options.feedback_callback =
-    [this, feedback_cb](
-      typename GoalHandleT::SharedPtr,
-      const std::shared_ptr<const typename ActionT::Feedback> feedback) mutable {
-      rclcpp::Time now = node_->now();
-      //store feedback
-      if (action_handle_) {
-        // Cast to specific action handle type to access type-specific methods (like getFeedback() or getResult())
-        auto handle = std::dynamic_pointer_cast<ActionHandleImpl<ActionT>>(action_handle_);
-        //confirm that the cast doesnot fail (in case of wrong action type)
-        if (handle) {
-          handle->setFeedback(feedback);
-        }
-      }
-      if ((now - last_feedback_time_).seconds() >= 2.0) {
-        last_feedback_time_ = now;
-        if (feedback_cb) {
-          feedback_cb(feedback);
-        }
-      }
-    };
-
-  send_goal_options.goal_response_callback =
-    [&](const typename GoalHandleT::SharedPtr & goal_handle) {
-      if (!goal_handle) {
-        RCLCPP_ERROR(node_->get_logger(), "Goal was rejected by server");
-      } else {
-        RCLCPP_INFO(node_->get_logger(), "Goal accepted by server, waiting for result");
-      }
-    };
-
-  send_goal_options.result_callback = [&](const typename GoalHandleT::WrappedResult & result) {
-    switch (result.code) {
-      case rclcpp_action::ResultCode::SUCCEEDED:
-        // RCLCPP_INFO(node_->get_logger(), "Goal completed successfully");
-        break;
-      case rclcpp_action::ResultCode::ABORTED:
-        // RCLCPP_ERROR(node_->get_logger(), "Goal was aborted");
-        break;
-      case rclcpp_action::ResultCode::CANCELED:
-        // RCLCPP_ERROR(node_->get_logger(), "Goal was canceled");
-        break;
-      default:
-        // RCLCPP_ERROR(node_->get_logger(), "Unknown result code");
-        break;
-    }
-  };
-
-  // send goal
-  auto goal_handle_future = client->async_send_goal(goal, send_goal_options);
-
-  // spin until goal is sent
-  if (
-    rclcpp::spin_until_future_complete(node_, goal_handle_future) !=
-    rclcpp::FutureReturnCode::SUCCESS) {
-    RCLCPP_ERROR(node_->get_logger(), "send_goal_async failed");
-    return false;
-  }
-
-  // check acceptance
-  auto goal_handle = goal_handle_future.get();
-  if (!goal_handle) {
-    RCLCPP_ERROR(node_->get_logger(), "Goal to '%s' was rejected", action_name.c_str());
-    return false;
-  }
-
-  action_handle_ = std::make_shared<ActionHandleImpl<ActionT>>(client, goal_handle);
-  // done! we ignore the actual result message here.
-  return true;
 }
 
 Navigator::TaskResult Navigator::getTaskResult()

@@ -62,6 +62,10 @@ int main(int argc, char ** argv)
         node->get_logger(), "ETA: %.0f seconds",
         rclcpp::Duration(feedback->estimated_time_remaining).seconds());
 
+      RCLCPP_INFO(
+        node->get_logger(), "Number of poses remaining: %u",
+        feedback->number_of_poses_remaining);
+
       if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(500.0s)) {
         navigator.cancelTask();
       }

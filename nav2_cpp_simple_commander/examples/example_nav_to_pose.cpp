@@ -54,10 +54,13 @@ int main(int argc, char ** argv)
       RCLCPP_INFO(
         node->get_logger(), "ETA: %.0f seconds",
         rclcpp::Duration(feedback->estimated_time_remaining).seconds());
+      RCLCPP_INFO(
+        node->get_logger(), "Distance remaining: %.2f meters",
+        feedback->distance_remaining);
 
       // Cancel if taking too long
       //Some navigation timeout to demo cancellation
-      if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(20.0s)) {
+      if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(80.0s)) {
         navigator.cancelTask();
         break;
       }
@@ -65,7 +68,7 @@ int main(int argc, char ** argv)
       // Preempt after 18 seconds
       // Some navigation request change to demo preemption
       //it enters here very LATE
-      if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(18.0s)) {
+      if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(8.0s)) {
         RCLCPP_WARN(
           node->get_logger(), "Preempting with new goal at nav_time = %.2f",
           rclcpp::Duration(feedback->navigation_time).seconds());

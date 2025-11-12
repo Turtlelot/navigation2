@@ -7,7 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 
 using namespace std::chrono_literals;
-using namespace Nav2SimpleCommander;
+using namespace nav2_simple_commander;
 
 int main(int argc, char ** argv)
 {
@@ -55,8 +55,7 @@ int main(int argc, char ** argv)
         node->get_logger(), "ETA: %.0f seconds",
         rclcpp::Duration(feedback->estimated_time_remaining).seconds());
       RCLCPP_INFO(
-        node->get_logger(), "Distance remaining: %.2f meters",
-        feedback->distance_remaining);
+        node->get_logger(), "Distance remaining: %.2f meters", feedback->distance_remaining);
 
       // Cancel if taking too long
       //Some navigation timeout to demo cancellation
@@ -81,13 +80,13 @@ int main(int argc, char ** argv)
 
   // Result handling
   switch (navigator.getTaskResult()) {
-    case Navigator::TaskResult::SUCCEEDED:
+    case TaskResult::kSucceeded:
       RCLCPP_INFO(node->get_logger(), "Result :: Goal succeeded!");
       break;
-    case Navigator::TaskResult::CANCELED:
+    case TaskResult::kCanceled:
       RCLCPP_WARN(node->get_logger(), "Result ::Goal was canceled!");
       break;
-    case Navigator::TaskResult::FAILED:
+    case TaskResult::kFailed:
       RCLCPP_ERROR(node->get_logger(), "Result ::Goal failed!");
       break;
     default:

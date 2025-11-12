@@ -1,13 +1,10 @@
 #include "nav2_cpp_simple_commander/navigator.hpp"
 
-#include <chrono>
-
-#include "rclcpp_action/rclcpp_action.hpp"
-
-namespace Nav2SimpleCommander
+namespace nav2_simple_commander
 {
 
-Navigator::Navigator(rclcpp::Node::SharedPtr node) : node_(std::move(node))
+Navigator::Navigator(rclcpp::Node::SharedPtr node, NavigatorConfig config)
+: node_(std::move(node)), config_(config)
 {
   // Create publisher to /initialpose
   initial_pose_pub_ =
@@ -18,20 +15,21 @@ Navigator::Navigator(rclcpp::Node::SharedPtr node) : node_(std::move(node))
     "amcl_pose", 10, std::bind(&Navigator::amclPoseCallback, this, std::placeholders::_1));
 }
 
+Navigator::~Navigator()
+{
+  // Cancel any active goal if configured to do so
+  if (config_.auto_cancel_on_destroy && action_handle_) {
+    action_handle_->cancel(node_);
+  }
+}
+
 bool Navigator::goToPose(
   const geometry_msgs::msg::PoseStamped & pose, const std::string & behavior_tree)
 {
   NavigateToPose::Goal goal;
   goal.pose = pose;
-
-  auto handle = std::make_shared<ActionHandleImpl<NavigateToPose>>();
-  if (!handle->runAction(node_, "navigate_to_pose", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start NavigateToPose action.");
-    return false;
-  }
-
-  action_handle_ = handle;
-  return true;
+  goal.behavior_tree = behavior_tree;
+  return sendActionGoal<NavigateToPose>(goal, "navigate_to_pose", nav_to_pose_client_);
 }
 
 bool Navigator::goThroughPoses(
@@ -40,15 +38,7 @@ bool Navigator::goThroughPoses(
   NavigateThroughPoses::Goal goal;
   goal.poses = poses;
   goal.behavior_tree = behavior_tree;
-
-  auto handle = std::make_shared<ActionHandleImpl<NavigateThroughPoses>>();
-  if (!handle->runAction(node_, "navigate_through_poses", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start NavigateThroughPoses action.");
-    return false;
-  }
-
-  action_handle_ = handle;
-  return true;
+  return sendActionGoal<NavigateThroughPoses>(goal, "navigate_through_poses", nav_through_poses_client_);
 }
 
 bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStamped> & poses)
@@ -56,41 +46,23 @@ bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStampe
   FollowWaypoints::Goal goal;
   goal.poses = poses;
 
-  auto handle = std::make_shared<ActionHandleImpl<FollowWaypoints>>();
-  if (!handle->runAction(node_, "follow_waypoints", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start FollowWaypoints action.");
-    return false;
-  }
-  action_handle_ = handle;
-  return true;
+  return sendActionGoal<FollowWaypoints>(goal, "follow_waypoints", follow_waypoints_client_);
 }
 
-bool Navigator::followGpsWaypoints(const std::vector<GeoPose> & poses)
-{
-  FollowGPSWaypoints::Goal goal;
-  goal.gps_poses = poses;
+// bool Navigator::followGpsWaypoints(const std::vector<GeoPose> & poses)
+// {
+//   FollowGPSWaypoints::Goal goal;
+//   goal.gps_poses = poses;
+//   return sendActionGoal<FollowGPSWaypoints>(goal, "follow_gps_waypoints", follow_gps_waypoints_client_);
+// }
 
-  auto handle = std::make_shared<ActionHandleImpl<FollowGPSWaypoints>>();
-  if (!handle->runAction(node_, "follow_gps_waypoints", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start FollowGPSWaypoints action.");
-    return false;
-  }
-  action_handle_ = handle;
-  return true;
-}
 bool Navigator::spin(double spin_dist, double time_allowance)
 {
   Spin::Goal goal;
   goal.target_yaw = spin_dist;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto handle = std::make_shared<ActionHandleImpl<Spin>>();
-  if (!handle->runAction(node_, "spin", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start Spin action.");
-    return false;
-  }
-  action_handle_ = handle;
-  return true;
+  return sendActionGoal<Spin>(goal, "spin", spin_client_);
 }
 
 bool Navigator::backup(double backup_dist, double backup_speed, double time_allowance)
@@ -103,17 +75,7 @@ bool Navigator::backup(double backup_dist, double backup_speed, double time_allo
   goal.speed = backup_speed;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto feedback_cb = [this](const std::shared_ptr<const BackUp::Feedback> feedback) {
-    RCLCPP_INFO(node_->get_logger(), "Distance traveled: %.2f", feedback->distance_traveled);
-  };
-  auto handle = std::make_shared<ActionHandleImpl<BackUp>>();
-  if (!handle->runAction(node_, "back_up", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start BackUp action.");
-    return false;
-  }
-  action_handle_ = handle;
-
-  return true;
+  return sendActionGoal<BackUp>(goal, "back_up", backup_client_);
 }
 
 bool Navigator::driveOnHeading(double dist, double speed, double time_allowance)
@@ -125,13 +87,7 @@ bool Navigator::driveOnHeading(double dist, double speed, double time_allowance)
   goal.speed = speed;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto handle = std::make_shared<ActionHandleImpl<DriveOnHeading>>();
-  if (!handle->runAction(node_, "drive_on_heading", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start DriveOnHeading action.");
-    return false;
-  }
-  action_handle_ = handle;
-  return true;
+  return sendActionGoal<DriveOnHeading>(goal, "drive_on_heading", drive_on_heading_client_);
 }
 
 bool Navigator::assistedTeleop(double time_allowance)
@@ -139,13 +95,7 @@ bool Navigator::assistedTeleop(double time_allowance)
   AssistedTeleop::Goal goal;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  auto handle = std::make_shared<ActionHandleImpl<AssistedTeleop>>();
-  if (!handle->runAction(node_, "assisted_teleop", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start AssistedTeleop action.");
-    return false;
-  }
-  action_handle_ = handle;
-  return true;
+  return sendActionGoal<AssistedTeleop>(goal, "assisted_teleop", assisted_teleop_client_);
 }
 
 bool Navigator::followPath(
@@ -156,16 +106,10 @@ bool Navigator::followPath(
   goal.controller_id = controller_id;
   goal.goal_checker_id = goal_checker_id;
 
-  auto handle = std::make_shared<ActionHandleImpl<FollowPath>>();
-  if (!handle->runAction(node_, "follow_path", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start FollowPath action.");
-    return false;
-  }
-  action_handle_ = handle;
-  return true;
+  return sendActionGoal<FollowPath>(goal, "follow_path", follow_path_client_);
 }
 
-bool Navigator::getPath(
+std::optional<Navigator::Path> Navigator::getPath(
   const PoseStamped & start, const PoseStamped & end, const std::string & planner_id,
   bool use_start)
 {
@@ -175,18 +119,20 @@ bool Navigator::getPath(
   goal.planner_id = planner_id;
   goal.use_start = use_start;
 
-  // No feedback callback for this action
-  auto handle = std::make_shared<ActionHandleImpl<ComputePathToPose>>();
-  if (!handle->runAction(node_, "compute_path_to_pose", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start ComputePathToPose action.");
-    return false;
+  if (!sendActionGoal<ComputePathToPose>(goal, "compute_path_to_pose", compute_path_to_pose_client_)) {
+    return std::nullopt;
   }
-  action_handle_ = handle;
-  return true;
+
+  // Wait for result via typed accessor
+  auto result = getResult<ComputePathToPose>();
+  if (result) {
+    return result->path;
+  }
+  return std::nullopt;
 }
 
-bool Navigator::getPathThroughPoses(
-  const PoseStamped & start, const std::vector<PoseStamped> goals, const std::string & planner_id,
+std::optional<Navigator::Path> Navigator::getPathThroughPoses(
+  const PoseStamped & start, const std::vector<PoseStamped> & goals, const std::string & planner_id,
   bool use_start)
 {
   ComputePathThroughPoses::Goal goal;
@@ -195,17 +141,19 @@ bool Navigator::getPathThroughPoses(
   goal.planner_id = planner_id;
   goal.use_start = use_start;
 
-  // No feedback callback for this action
-  auto handle = std::make_shared<ActionHandleImpl<ComputePathThroughPoses>>();
-  if (!handle->runAction(node_, "compute_path_through_poses", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start ComputePathThroughPoses action.");
-    return false;
+  if (!sendActionGoal<ComputePathThroughPoses>(goal, "compute_path_through_poses", compute_path_through_poses_client_)) {
+    return std::nullopt;
   }
-  action_handle_ = handle;
-  return true;
+
+  // Wait for result via typed accessor
+  auto result = getResult<ComputePathThroughPoses>();
+  if (result) {
+    return result->path;
+  }
+  return std::nullopt;
 }
 
-bool Navigator::smoothPath(
+std::optional<Navigator::Path> Navigator::smoothPath(
   const Path & path, const std::string & smoother_id, double max_duration, bool check_for_collision)
 {
   SmoothPath::Goal goal;
@@ -213,15 +161,17 @@ bool Navigator::smoothPath(
   goal.smoother_id = smoother_id;
   goal.max_smoothing_duration = rclcpp::Duration::from_seconds(max_duration);
   goal.check_for_collisions = check_for_collision;
-
-  // No feedback callback for this action
-  auto handle = std::make_shared<ActionHandleImpl<SmoothPath>>();
-  if (!handle->runAction(node_, "smooth_path", goal)) {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to start SmoothPath action.");
-    return false;
+  
+  if (!sendActionGoal<SmoothPath>(goal, "smooth_path", smooth_path_client_)) {
+    return std::nullopt;
   }
-  action_handle_ = handle;
-  return true;
+
+  // Wait for result via typed accessor
+  auto result = getResult<SmoothPath>();
+  if (result) {
+    return result->path;
+  }
+  return std::nullopt;
 }
 void Navigator::publishInitialPose()
 {
@@ -238,6 +188,7 @@ void Navigator::setInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamp
 
 void Navigator::amclPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
+  (void)msg;
   RCLCPP_DEBUG(node_->get_logger(), "Received AMCL pose");
   initial_pose_received_ = true;
 }
@@ -431,62 +382,47 @@ bool Navigator::isTaskComplete()
   if (!action_handle_) {
     return true;
   }
-  return action_handle_->isDone(node_);
+  return action_handle_->isComplete(node_);
 }
 
-Navigator::TaskResult Navigator::getTaskResult()
+TaskResult Navigator::getTaskResult()
 {
   if (!action_handle_) {
     RCLCPP_WARN(node_->get_logger(), "No active action handle.");
-    return TaskResult::UNKNOWN;
+    return TaskResult::kUnknown;
   }
 
-  auto result_code = action_handle_->getWrappedResultCode(node_);
+  auto result_code = action_handle_->getResultCode(node_);
   switch (result_code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
-      return TaskResult::SUCCEEDED;
+      return TaskResult::kSucceeded;
     case rclcpp_action::ResultCode::CANCELED:
-      return TaskResult::CANCELED;
+      return TaskResult::kCanceled;
     case rclcpp_action::ResultCode::ABORTED:
-      return TaskResult::FAILED;
+      return TaskResult::kFailed;
     default:
-      return TaskResult::UNKNOWN;
+      return TaskResult::kUnknown;
   }
 }
 
-void Navigator::changeMap(const std::string & map_filepath)
+bool Navigator::changeMap(const std::string & map_url)
 {
-  // Create a service client for the change_map service
-  auto load_map_client = node_->create_client<LoadMap>("map_server/load_map");
-
-  // Wait for the service to be available
-  if (!load_map_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Service 'map_server/load_map' not available");
-    return;
-  }
-
-  // Create a request to change the map
+  // Create a request to load the map
   auto request = std::make_shared<LoadMap::Request>();
-  request->map_url = map_filepath;
+  request->map_url = map_url;
 
-  // Send the request and wait for the response synchronously
-  auto future = load_map_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    //  Retrieve the response
-    auto response = future.get();
+  // Call the service using the template
+  auto response = callService<LoadMap>("map_server/load_map", request);
 
-    // Check if the response is successful
-    if (response->result != LoadMap::Response::RESULT_SUCCESS) {
-      RCLCPP_ERROR(node_->get_logger(), "Change map request failed!");
-    } else {
-      RCLCPP_INFO(node_->get_logger(), "Change map was successful!");
-    }
-  } else {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to call map_server/load_map service");
+  if (response != nullptr) {
+    RCLCPP_INFO(node_->get_logger(), "Map changed successfully: %s", map_url.c_str());
+    return true;
   }
+  RCLCPP_ERROR(node_->get_logger(), "Failed to load map: %s", map_url.c_str());
+  return false;
 }
 
-void Navigator::clearallCostmaps()
+void Navigator::clearAllCostmaps()
 {
   clearLocalCostmap();
   clearGlobalCostmap();
@@ -494,108 +430,210 @@ void Navigator::clearallCostmaps()
 
 void Navigator::clearLocalCostmap()
 {
-  // Create a service client for the clear_local_costmap service
-  auto local_costmap_client =
-    node_->create_client<ClearEntireCostmap>("local_costmap/clear_entirely_local_costmap");
-
-  // Wait for the service to be available
-  if (!local_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Service 'local_costmap/clear_entirely_local_costmap' not available");
-    return;
-  }
-
   // Create a request to clear the local costmap
   auto request = std::make_shared<ClearEntireCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = local_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    RCLCPP_INFO(node_->get_logger(), "Local costmap cleared successfully!");
+  // Call the service using the template
+  auto response =
+    callService<ClearEntireCostmap>("local_costmap/clear_entirely_local_costmap", request);
+
+  if (response != nullptr) {
+    RCLCPP_INFO(node_->get_logger(), "Local costmap cleared successfully");
   } else {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Failed to call local_costmap/clear_entirely_local_costmap service");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to clear local costmap");
   }
 }
 
 void Navigator::clearGlobalCostmap()
 {
-  // Create a service client for the clear_global_costmap service
-  auto global_costmap_client =
-    node_->create_client<ClearEntireCostmap>("global_costmap/clear_entirely_global_costmap");
-
-  // Wait for the service to be available
-  if (!global_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Service 'global_costmap/clear_entirely_global_costmap' not available");
-    return;
-  }
-
   // Create a request to clear the global costmap
   auto request = std::make_shared<ClearEntireCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = global_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    RCLCPP_INFO(node_->get_logger(), "Global costmap cleared successfully!");
+  // Call the service using the template
+  auto response =
+    callService<ClearEntireCostmap>("global_costmap/clear_entirely_global_costmap", request);
+
+  if (response != nullptr) {
+    RCLCPP_INFO(node_->get_logger(), "Global costmap cleared successfully");
   } else {
-    RCLCPP_ERROR(
-      node_->get_logger(), "Failed to call global_costmap/clear_entirely_global_costmap service");
+    RCLCPP_ERROR(node_->get_logger(), "Failed to clear global costmap");
   }
 }
 
-Navigator::Costmap Navigator::getLocalCostmap()
+// void Navigator::clearLocalCostmapAroundPose(const PoseStamped & pose, double distance)
+// {
+//   // Create a request to clear the local costmap around pose
+//   auto request = std::make_shared<ClearCostmapAroundPose::Request>();
+//   request->pose = pose;
+//   request->radius = distance;
+
+//   // Call the service using the template
+//   auto response =
+//     callService<ClearCostmapAroundPose>("local_costmap/clear_costmap_around_pose", request);
+
+//   if (response != nullptr) {
+//     RCLCPP_INFO(
+//       node_->get_logger(), "Local costmap cleared around pose (distance: %.2f m)", distance);
+//   } else {
+//     RCLCPP_ERROR(
+//       node_->get_logger(), "Failed to clear local costmap around pose (distance: %.2f m)",
+//       distance);
+//   }
+// }
+
+// void Navigator::clearGlobalCostmapAroundPose(const PoseStamped & pose, double distance)
+// {
+//   // Create a request to clear the global costmap around pose
+//   auto request = std::make_shared<ClearCostmapAroundPose::Request>();
+//   request->pose = pose;
+//   request->radius = distance;
+
+//   // Call the service using the template
+//   auto response =
+//     callService<ClearCostmapAroundPose>("global_costmap/clear_costmap_around_pose", request);
+
+//   if (response != nullptr) {
+//     RCLCPP_INFO(
+//       node_->get_logger(), "Global costmap cleared around pose (distance: %.2f m)", distance);
+//   } else {
+//     RCLCPP_ERROR(
+//       node_->get_logger(), "Failed to clear global costmap around pose (distance: %.2f m)",
+//       distance);
+//   }
+// }
+
+// void Navigator::clearCostmapExceptRegion(double distance)
+// {
+//   // Create a request to clear the local costmap except region
+//   auto request = std::make_shared<ClearCostmapExceptRegion::Request>();
+//   request->radius = distance;
+
+//   // Call the service using the template
+//   auto response =
+//     callService<ClearCostmapExceptRegion>("local_costmap/clear_costmap_except_region", request);
+
+//   if (response != nullptr) {
+//     RCLCPP_INFO(
+//       node_->get_logger(), "Local costmap cleared except region (radius: %.2f m)", distance);
+//   } else {
+//     RCLCPP_ERROR(
+//       node_->get_logger(), "Failed to clear local costmap except region (radius: %.2f m)",
+//       distance);
+//   }
+// }
+
+std::optional<Navigator::Costmap> Navigator::getLocalCostmap()
 {
-  // Create a service client for the get_costmap service
-  auto local_costmap_client = node_->create_client<GetCostmap>("local_costmap/get_costmap");
-
-  // Wait for the service to be available
-  if (!local_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Service 'local_costmap/get_costmap' not available");
-    return Costmap();
-  }
-
   // Create a request to get the costmap
   auto request = std::make_shared<GetCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = local_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    // Retrieve the response
-    auto response = future.get();
+  // Call the service using the template
+  auto response = callService<GetCostmap>("local_costmap/get_costmap", request);
 
-    // return the costmap
+  if (response != nullptr) {
+    RCLCPP_INFO(node_->get_logger(), "Retrieved local costmap successfully");
     return response->map;
-  } else {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to call local_costmap/get_costmap service");
   }
+  RCLCPP_ERROR(node_->get_logger(), "Failed to retrieve local costmap");
+  return std::nullopt;
 }
 
-Navigator::Costmap Navigator::getGlobalCostmap()
+std::optional<Navigator::Costmap> Navigator::getGlobalCostmap()
 {
-  // Create a service client for the get_costmap service
-  auto global_costmap_client = node_->create_client<GetCostmap>("global_costmap/get_costmap");
-
-  // Wait for the service to be available
-  if (!global_costmap_client->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(node_->get_logger(), "Service 'global_costmap/get_costmap' not available");
-    return Costmap();
-  }
-
   // Create a request to get the costmap
   auto request = std::make_shared<GetCostmap::Request>();
 
-  // Send the request and wait for the response synchronously
-  auto future = global_costmap_client->async_send_request(request);
-  if (rclcpp::spin_until_future_complete(node_, future) == rclcpp::FutureReturnCode::SUCCESS) {
-    // Retrieve the response
-    auto response = future.get();
+  // Call the service using the template
+  auto response = callService<GetCostmap>("global_costmap/get_costmap", request);
 
-    // return the costmap
+  if (response != nullptr) {
+    RCLCPP_INFO(node_->get_logger(), "Retrieved global costmap successfully");
     return response->map;
-  } else {
-    RCLCPP_ERROR(node_->get_logger(), "Failed to call global_costmap/get_costmap service");
   }
+  RCLCPP_ERROR(node_->get_logger(), "Failed to retrieve global costmap");
+  return std::nullopt;
 }
 
-}  // namespace Nav2SimpleCommander
+// void Navigator::toggleCollisionMonitor(bool enable)
+// {
+//   // Create a request to toggle collision monitor
+//   auto request = std::make_shared<Toggle::Request>();
+//   request->enable = enable;
+
+//   // Call the service using the template
+//   auto response = callService<Toggle>("collision_monitor/toggle", request);
+
+//   if (response != nullptr) {
+//     if (response->success) {
+//       RCLCPP_INFO(
+//         node_->get_logger(), "Collision monitor toggled %s successfully", enable ? "ON" : "OFF");
+//     } else {
+//       RCLCPP_WARN(
+//         node_->get_logger(), "Collision monitor toggle %s request failed: %s",
+//         enable ? "ON" : "OFF", response->message.c_str());
+//     }
+//   } else {
+//     RCLCPP_ERROR(
+//       node_->get_logger(), "Failed to toggle collision monitor %s", enable ? "ON" : "OFF");
+//   }
+// }
+
+// bool Navigator::followObjectByTopic(const std::string & topic, double max_duration)
+// {
+//   FollowObject::Goal goal;
+//   goal.pose_topic = topic;
+//   goal.tracked_frame = "";
+//   goal.max_duration = rclcpp::Duration::from_seconds(max_duration);
+
+//   return sendActionGoal<FollowObject>(goal, "follow_object", follow_object_client_);
+// }
+
+// bool Navigator::followObjectByFrame(const std::string & frame, double max_duration)
+// {
+//   FollowObject::Goal goal;
+//   goal.pose_topic = "";
+//   goal.tracked_frame = frame;
+//   goal.max_duration = rclcpp::Duration::from_seconds(max_duration);
+
+//   return sendActionGoal<FollowObject>(goal, "follow_object", follow_object_client_);
+// }
+
+// bool Navigator::dockRobotByPose(const PoseStamped & dock_pose, const std::string & dock_type)
+// {
+//   RCLCPP_INFO(node_->get_logger(), "Docking robot at pose with dock type: %s", dock_type.c_str());
+
+//   DockRobot::Goal goal;
+//   goal.use_dock_id = false;
+//   goal.dock_pose = dock_pose;
+//   goal.dock_type = dock_type;
+//   goal.max_staging_time = 1000.0f;
+//   goal.navigate_to_staging_pose = true;
+
+//   return sendActionGoal<DockRobot>(goal, "dock_robot", dock_robot_client_);
+// }
+
+// bool Navigator::dockRobotById(const std::string & dock_id)
+// {
+//   RCLCPP_INFO(node_->get_logger(), "Docking robot at dock ID: %s", dock_id.c_str());
+
+//   DockRobot::Goal goal;
+//   goal.use_dock_id = true;
+//   goal.dock_id = dock_id;
+//   goal.max_staging_time = 1000.0f;
+//   goal.navigate_to_staging_pose = true;
+
+//   return sendActionGoal<DockRobot>(goal, "dock_robot", dock_robot_client_);
+// }
+
+// bool Navigator::undockRobot(const std::string & dock_type)
+// {
+//   RCLCPP_INFO(node_->get_logger(), "Undocking robot with dock type: %s", dock_type.c_str());
+
+//   UndockRobot::Goal goal;
+//   goal.dock_type = dock_type;
+//   goal.max_undocking_time = 30.0f;
+
+//   return sendActionGoal<UndockRobot>(goal, "undock_robot", undock_robot_client_);
+// }
+
+}  // namespace nav2_simple_commander

@@ -1,12 +1,19 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.14)
 project(nav2_cpp_simple_commander)
 
-# Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+# ========= Language / Flags =========
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_compile_options(-Wall -Wextra -Wpedantic)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
+if(ENABLE_ASAN)
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address)
 endif()
 
-# Find dependencies
+# ========= Dependencies =========
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
@@ -16,19 +23,23 @@ find_package(geometry_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 
-# Include header files
+# Optional linters
+find_package(ament_lint_auto QUIET)
+find_package(ament_cmake_clang_format QUIET)
+find_package(ament_cmake_cppcheck QUIET)
+find_package(ament_cmake_cpplint QUIET)
+
+# ========= Includes =========
 include_directories(
   include
 )
 
-# Add the executable
-add_executable(robot_navigator
-  src/robot_navigator.cpp
+# ========= Main Library =========
+add_library(${PROJECT_NAME} SHARED
   src/navigator.cpp
 )
 
-# Link dependencies to the executable
-ament_target_dependencies(robot_navigator
+ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   rclcpp_action
   nav2_msgs
@@ -38,24 +49,60 @@ ament_target_dependencies(robot_navigator
   action_msgs
 )
 
-# Install the executable
-install(TARGETS robot_navigator
-  DESTINATION lib/${PROJECT_NAME}
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-# Install header files
-install(DIRECTORY include/
-  DESTINATION include/
-)
-
-## Add the executable for examples 
+# ========= Executables =========
+## Example 1: navigate to pose
 add_executable(example_nav_to_pose
   examples/example_nav_to_pose.cpp
-  src/navigator.cpp
 )
 
-# Link dependencies to the executable
+target_link_libraries(example_nav_to_pose
+  ${PROJECT_NAME}
+)
+
 ament_target_dependencies(example_nav_to_pose
+  rclcpp
+)
+
+## Example 2: navigate through poses
+add_executable(go_through_poses_demo
+  examples/example_nav_through_poses.cpp
+)
+
+target_link_libraries(go_through_poses_demo
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(go_through_poses_demo
+  rclcpp
+)
+
+# ========= Install =========
+install(
+  TARGETS ${PROJECT_NAME}
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(
+  TARGETS
+    example_nav_to_pose
+    go_through_poses_demo
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+
+# ========= Exports =========
+ament_export_dependencies(
   rclcpp
   rclcpp_action
   nav2_msgs
@@ -64,13 +111,12 @@ ament_target_dependencies(example_nav_to_pose
   lifecycle_msgs
   action_msgs
 )
+ament_export_libraries(${PROJECT_NAME})
+ament_export_include_directories(include)
 
+# ========= Linters (optional) =========
+if(ament_lint_auto_FOUND)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
-# Install the test node
-install(TARGETS example_nav_to_pose
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-
-# Package declaration
 ament_package()

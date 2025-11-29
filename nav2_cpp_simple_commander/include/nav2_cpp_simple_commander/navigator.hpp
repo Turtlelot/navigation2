@@ -403,12 +403,12 @@ public:
   /**
    * @brief Publish the initial pose estimate for the localization stack.
    *
-   * @param initial_pose PoseWithCovarianceStamped containing pose and covariance.
+   * @param initial_pose PoseStamped .
    *
    * @details This method republishes the provided initial pose on the `initialpose`
    * topic so that AMCL or other localization nodes can initialize accordingly.
    */
-  void setInitialPose(const PoseWithCovarianceStamped & initial_pose);
+  void setInitialPose(const PoseStamped & initial_pose);
 
   // ============================================================================
   // Lifecycle Management
@@ -659,7 +659,7 @@ private:
   NavigatorConfig config_;
 
   // Initial pose management
-  PoseWithCovarianceStamped initial_pose_;
+  PoseStamped initial_pose_;
   bool initial_pose_received_{false};
 
   // Publishers and subscribers

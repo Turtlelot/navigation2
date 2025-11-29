@@ -181,11 +181,22 @@ std::optional<Navigator::Path> Navigator::smoothPath(
 }
 void Navigator::publishInitialPose()
 {
+  // Convert PoseStamped → PoseWithCovarianceStamped
+  geometry_msgs::msg::PoseWithCovarianceStamped msg;
+
+  msg.header = initial_pose_.header;
+  msg.pose.pose = initial_pose_.pose;
+
+  // Optional: zero covariance
+  for (auto & c : msg.pose.covariance) {
+    c = 0.0;
+  }
+
   RCLCPP_INFO(node_->get_logger(), "Publishing Initial Pose");
-  initial_pose_pub_->publish(initial_pose_);
+  initial_pose_pub_->publish(msg);
 }
 
-void Navigator::setInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped & initial_pose)
+void Navigator::setInitialPose(const geometry_msgs::msg::PoseStamped & initial_pose)
 {
   initial_pose_received_ = false;
   initial_pose_ = initial_pose;

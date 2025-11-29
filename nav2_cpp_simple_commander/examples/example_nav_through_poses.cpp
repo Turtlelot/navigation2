@@ -19,17 +19,22 @@ int main(int argc, char ** argv)
     Navigator navigator(node);
 
     // Set initial pose (optional for this demo)
-    geometry_msgs::msg::PoseWithCovarianceStamped initial_pose;
+    // tested in turtlebot3_world
+    geometry_msgs::msg::PoseStamped initial_pose;
     initial_pose.header.frame_id = "map";
     initial_pose.header.stamp = node->now();
-    initial_pose.pose.pose.position.x = 3.45;
-    initial_pose.pose.pose.position.y = 2.15;
-    initial_pose.pose.pose.orientation.z = 1.0;
-    initial_pose.pose.pose.orientation.w = 0.0;
-    //   navigator.setInitialPose(initial_pose);
+    initial_pose.pose.position.x = -2.0;
+    ;
+    initial_pose.pose.position.y = 0.0;
+    initial_pose.pose.orientation.x = 0.0;
+    initial_pose.pose.orientation.y = 0.0;
+    initial_pose.pose.orientation.z = 0.0;
+    initial_pose.pose.orientation.w = 1.0;
+
+    navigator.setInitialPose(initial_pose);
 
     // Wait until navigation is active
-    //   navigator.waitUntilNav2Active();
+    navigator.waitUntilNav2Active();
 
     // Define goal poses for NavigateThroughPoses
     std::vector<geometry_msgs::msg::PoseStamped> goal_poses;

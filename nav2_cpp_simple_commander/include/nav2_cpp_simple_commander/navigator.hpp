@@ -15,8 +15,8 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <lifecycle_msgs/srv/get_state.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
 #include <rclcpp_action/client.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 
 /// Project headers
 #include "nav2_cpp_simple_commander/action_handle.hpp"

@@ -19,7 +19,10 @@ Navigator::~Navigator()
 {
   // Cancel any active goal if configured to do so
   if (config_.auto_cancel_on_destroy && action_handle_) {
-    action_handle_->cancel(node_);
+    // Only cancel if the goal is still executing
+    if (!action_handle_->isComplete(node_)) {
+      action_handle_->cancel(node_);
+    }
   }
 }
 
@@ -38,7 +41,8 @@ bool Navigator::goThroughPoses(
   NavigateThroughPoses::Goal goal;
   goal.poses = poses;
   goal.behavior_tree = behavior_tree;
-  return sendActionGoal<NavigateThroughPoses>(goal, "navigate_through_poses", nav_through_poses_client_);
+  return sendActionGoal<NavigateThroughPoses>(
+    goal, "navigate_through_poses", nav_through_poses_client_);
 }
 
 bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStamped> & poses)
@@ -119,7 +123,8 @@ std::optional<Navigator::Path> Navigator::getPath(
   goal.planner_id = planner_id;
   goal.use_start = use_start;
 
-  if (!sendActionGoal<ComputePathToPose>(goal, "compute_path_to_pose", compute_path_to_pose_client_)) {
+  if (!sendActionGoal<ComputePathToPose>(
+        goal, "compute_path_to_pose", compute_path_to_pose_client_)) {
     return std::nullopt;
   }
 
@@ -141,7 +146,8 @@ std::optional<Navigator::Path> Navigator::getPathThroughPoses(
   goal.planner_id = planner_id;
   goal.use_start = use_start;
 
-  if (!sendActionGoal<ComputePathThroughPoses>(goal, "compute_path_through_poses", compute_path_through_poses_client_)) {
+  if (!sendActionGoal<ComputePathThroughPoses>(
+        goal, "compute_path_through_poses", compute_path_through_poses_client_)) {
     return std::nullopt;
   }
 
@@ -161,7 +167,7 @@ std::optional<Navigator::Path> Navigator::smoothPath(
   goal.smoother_id = smoother_id;
   goal.max_smoothing_duration = rclcpp::Duration::from_seconds(max_duration);
   goal.check_for_collisions = check_for_collision;
-  
+
   if (!sendActionGoal<SmoothPath>(goal, "smooth_path", smooth_path_client_)) {
     return std::nullopt;
   }

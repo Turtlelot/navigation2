@@ -85,7 +85,6 @@ def main():
 
     # sanity check a valid path exists
     # path = navigator.getPathThroughPoses(initial_pose, goal_poses)
-
     navigator.goThroughPoses(goal_poses)
 
     i = 0

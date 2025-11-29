@@ -13,85 +13,91 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto node = rclcpp::Node::make_shared("example_nav_to_pose");
-  Navigator navigator(node);
+  // Scope ensures Navigator is destroyed BEFORE rclcpp::shutdown().
+  // Destroy Navigator before rclcpp::shutdown() to avoid ROS2 context errors.
+  {
+    Navigator navigator(node);
 
-  // Set initial pose
-  geometry_msgs::msg::PoseWithCovarianceStamped initial_pose;
-  initial_pose.header.frame_id = "map";
-  initial_pose.header.stamp = node->now();
-  initial_pose.pose.pose.position.x = 3.45;
-  initial_pose.pose.pose.position.y = 2.15;
-  initial_pose.pose.pose.orientation.z = 1.0;
-  initial_pose.pose.pose.orientation.w = 0.0;
-  // navigator.setInitialPose(initial_pose);
+    // (Optional) Set initial robot pose in map
+    geometry_msgs::msg::PoseWithCovarianceStamped initial_pose;
+    initial_pose.header.frame_id = "map";
+    initial_pose.header.stamp = node->now();
+    initial_pose.pose.pose.position.x = 3.45;
+    initial_pose.pose.pose.position.y = 2.15;
+    initial_pose.pose.pose.orientation.z = 1.0;
+    initial_pose.pose.pose.orientation.w = 0.0;
+    // navigator.setInitialPose(initial_pose);
 
-  // Startup lifecycle (if not autostarted)
-  // navigator.lifecycleStartup();
+    //(Optional) Startup Nav2 lifecycle manager (if not autostarted)
+    // navigator.lifecycleStartup();
 
-  // Wait for Nav2 to become active
-  // navigator.waitUntilNav2Active();
+    // (Optional) Wait for Nav2 to activate fully
+    // navigator.waitUntilNav2Active();
 
-  // Define goal
-  geometry_msgs::msg::PoseStamped goal_pose;
-  goal_pose.header.frame_id = "map";
-  goal_pose.header.stamp = node->now();
-  goal_pose.pose.position.x = -2.0;
-  goal_pose.pose.position.y = -0.5;
-  goal_pose.pose.orientation.w = 1.0;
+    // Define goal
+    geometry_msgs::msg::PoseStamped goal_pose;
+    goal_pose.header.frame_id = "map";
+    goal_pose.header.stamp = node->now();
+    goal_pose.pose.position.x = -2.0;
+    goal_pose.pose.position.y = -0.5;
+    goal_pose.pose.orientation.w = 1.0;
 
-  // Send goal
-  if (!navigator.goToPose(goal_pose)) {
-    RCLCPP_ERROR(node->get_logger(), "Failed to send goal.");
-    rclcpp::shutdown();
-    return 1;
-  }
-
-  // Monitor task
-  int i = 0;
-  while (!navigator.isTaskComplete()) {
-    auto feedback = navigator.getFeedback<Navigator::NavigateToPose>();
-    if (feedback && i++ % 5 == 0) {
-      RCLCPP_INFO(
-        node->get_logger(), "ETA: %.0f seconds",
-        rclcpp::Duration(feedback->estimated_time_remaining).seconds());
-      RCLCPP_INFO(
-        node->get_logger(), "Distance remaining: %.2f meters", feedback->distance_remaining);
-
-      // Cancel if taking too long
-      //Some navigation timeout to demo cancellation
-      if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(80.0s)) {
-        navigator.cancelTask();
-        break;
-      }
-
-      // Preempt after 18 seconds
-      // Some navigation request change to demo preemption
-      //it enters here very LATE
-      if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(8.0s)) {
-        RCLCPP_WARN(
-          node->get_logger(), "Preempting with new goal at nav_time = %.2f",
-          rclcpp::Duration(feedback->navigation_time).seconds());
-        goal_pose.pose.position.y = 0.5;
-        navigator.goToPose(goal_pose);
-      }
+    // Send goal
+    if (!navigator.goToPose(goal_pose)) {
+      RCLCPP_ERROR(node->get_logger(), "Failed to send goal.");
+      rclcpp::shutdown();
+      return 1;
     }
-    rclcpp::sleep_for(500ms);
-  }
 
-  // Result handling
-  switch (navigator.getTaskResult()) {
-    case TaskResult::kSucceeded:
-      RCLCPP_INFO(node->get_logger(), "Result :: Goal succeeded!");
-      break;
-    case TaskResult::kCanceled:
-      RCLCPP_WARN(node->get_logger(), "Result ::Goal was canceled!");
-      break;
-    case TaskResult::kFailed:
-      RCLCPP_ERROR(node->get_logger(), "Result ::Goal failed!");
-      break;
-    default:
-      RCLCPP_ERROR(node->get_logger(), "Result ::Goal returned unknown status.");
-      break;
+    // Monitor navigation feedback
+    int i = 0;
+    while (!navigator.isTaskComplete()) {
+      auto feedback = navigator.getFeedback<Navigator::NavigateToPose>();
+      if (feedback && i++ % 5 == 0) {
+        RCLCPP_INFO(
+          node->get_logger(), "ETA: %.0f seconds",
+          rclcpp::Duration(feedback->estimated_time_remaining).seconds());
+        RCLCPP_INFO(
+          node->get_logger(), "Distance remaining: %.2f meters", feedback->distance_remaining);
+
+        // Cancel if navigation takes too long (demo)
+        //decrease navigation timeout to demo cancellation
+        if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(80.0s)) {
+          navigator.cancelTask();
+          break;
+        }
+
+        // Preempt the current goal after 8 seconds (demo)
+        if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(8.0s)) {
+          RCLCPP_WARN(
+            node->get_logger(), "Preempting with new goal at nav_time = %.2f",
+            rclcpp::Duration(feedback->navigation_time).seconds());
+          navigator.cancelTask();           // Cancel old goal
+          goal_pose.pose.position.y = 0.5;  // Adjust target
+          navigator.goToPose(goal_pose);    // Send new goal
+          // After preemption, restart the monitoring loop
+          i = 0;
+          continue;
+        }
+      }
+      rclcpp::sleep_for(500ms);
+    }
+
+    // Handle result of navigation
+    switch (navigator.getTaskResult()) {
+      case TaskResult::kSucceeded:
+        RCLCPP_INFO(node->get_logger(), "Result :: Goal succeeded!");
+        break;
+      case TaskResult::kCanceled:
+        RCLCPP_WARN(node->get_logger(), "Result ::Goal was canceled!");
+        break;
+      case TaskResult::kFailed:
+        RCLCPP_ERROR(node->get_logger(), "Result ::Goal failed!");
+        break;
+      default:
+        RCLCPP_ERROR(node->get_logger(), "Result ::Goal returned unknown status.");
+        break;
+    }
   }
 
   // Shutdown Nav2

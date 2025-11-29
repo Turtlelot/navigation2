@@ -213,10 +213,7 @@ public:
    * @return Shared pointer to the latest feedback, or nullptr if none has been
    * received yet.
    */
-  std::shared_ptr<const FeedbackT> getFeedback() const
-  {
-    return last_feedback_;
-  }
+  std::shared_ptr<const FeedbackT> getFeedback() const { return last_feedback_; }
 
   /**
    * @brief Block until the action result is available and return the result message.

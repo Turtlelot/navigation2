@@ -46,61 +46,61 @@ int main(int argc, char ** argv)
     goal_pose.pose.orientation.w = 1.0;
 
     // Send goal
-    //   if (!navigator.goToPose(goal_pose)) {
-    //     RCLCPP_ERROR(node->get_logger(), "Failed to send goal.");
-    //     rclcpp::shutdown();
-    //     return 1;
-    //   }
+    if (!navigator.goToPose(goal_pose)) {
+      RCLCPP_ERROR(node->get_logger(), "Failed to send goal.");
+      rclcpp::shutdown();
+      return 1;
+    }
 
-    //   // Monitor navigation feedback
-    //   int i = 0;
-    //   while (!navigator.isTaskComplete()) {
-    //     auto feedback = navigator.getFeedback<Navigator::NavigateToPose>();
-    //     if (feedback && i++ % 5 == 0) {
-    //       RCLCPP_INFO(
-    //         node->get_logger(), "ETA: %.0f seconds",
-    //         rclcpp::Duration(feedback->estimated_time_remaining).seconds());
-    //       RCLCPP_INFO(
-    //         node->get_logger(), "Distance remaining: %.2f meters", feedback->distance_remaining);
+    // Monitor navigation feedback
+    int i = 0;
+    while (!navigator.isTaskComplete()) {
+      auto feedback = navigator.getFeedback<Navigator::NavigateToPose>();
+      if (feedback && i++ % 5 == 0) {
+        RCLCPP_INFO(
+          node->get_logger(), "ETA: %.0f seconds",
+          rclcpp::Duration(feedback->estimated_time_remaining).seconds());
+        RCLCPP_INFO(
+          node->get_logger(), "Distance remaining: %.2f meters", feedback->distance_remaining);
 
-    //       // Cancel if navigation takes too long (demo)
-    //       //decrease navigation timeout to demo cancellation
-    //       if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(80.0s)) {
-    //         navigator.cancelTask();
-    //         break;
-    //       }
+        // Cancel if navigation takes too long (demo)
+        //decrease navigation timeout to demo cancellation
+        if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(80.0s)) {
+          navigator.cancelTask();
+          break;
+        }
 
-    //       // Preempt the current goal after 8 seconds (demo)
-    //       if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(8.0s)) {
-    //         RCLCPP_WARN(
-    //           node->get_logger(), "Preempting with new goal at nav_time = %.2f",
-    //           rclcpp::Duration(feedback->navigation_time).seconds());
-    //         navigator.cancelTask();           // Cancel old goal
-    //         goal_pose.pose.position.y = 0.5;  // Adjust target
-    //         navigator.goToPose(goal_pose);    // Send new goal
-    //         // After preemption, restart the monitoring loop
-    //         i = 0;
-    //         continue;
-    //       }
-    //     }
-    //     rclcpp::sleep_for(500ms);
-    //   }
+        // Preempt the current goal after 8 seconds (demo)
+        if (rclcpp::Duration(feedback->navigation_time) > rclcpp::Duration(8.0s)) {
+          RCLCPP_WARN(
+            node->get_logger(), "Preempting with new goal at nav_time = %.2f",
+            rclcpp::Duration(feedback->navigation_time).seconds());
+          navigator.cancelTask();           // Cancel old goal
+          goal_pose.pose.position.y = 0.5;  // Adjust target
+          navigator.goToPose(goal_pose);    // Send new goal
+          // After preemption, restart the monitoring loop
+          i = 0;
+          continue;
+        }
+      }
+      rclcpp::sleep_for(500ms);
+    }
 
-    //   // Handle result of navigation
-    //   switch (navigator.getTaskResult()) {
-    //     case TaskResult::kSucceeded:
-    //       RCLCPP_INFO(node->get_logger(), "Result :: Goal succeeded!");
-    //       break;
-    //     case TaskResult::kCanceled:
-    //       RCLCPP_WARN(node->get_logger(), "Result ::Goal was canceled!");
-    //       break;
-    //     case TaskResult::kFailed:
-    //       RCLCPP_ERROR(node->get_logger(), "Result ::Goal failed!");
-    //       break;
-    //     default:
-    //       RCLCPP_ERROR(node->get_logger(), "Result ::Goal returned unknown status.");
-    //       break;
-    //   }
+    // Handle result of navigation
+    switch (navigator.getTaskResult()) {
+      case TaskResult::kSucceeded:
+        RCLCPP_INFO(node->get_logger(), "Result :: Goal succeeded!");
+        break;
+      case TaskResult::kCanceled:
+        RCLCPP_WARN(node->get_logger(), "Result ::Goal was canceled!");
+        break;
+      case TaskResult::kFailed:
+        RCLCPP_ERROR(node->get_logger(), "Result ::Goal failed!");
+        break;
+      default:
+        RCLCPP_ERROR(node->get_logger(), "Result ::Goal returned unknown status.");
+        break;
+    }
   }
 
   // Shutdown Nav2

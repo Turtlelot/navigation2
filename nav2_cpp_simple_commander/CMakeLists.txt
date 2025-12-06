@@ -80,6 +80,30 @@ target_link_libraries(go_through_poses_demo
 ament_target_dependencies(go_through_poses_demo
   rclcpp
 )
+## Example 3: follow waypoints
+add_executable(follow_waypoints_demo
+  examples/example_waypoint_follower.cpp
+)
+
+target_link_libraries(follow_waypoints_demo
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(follow_waypoints_demo
+  rclcpp
+)
+## Example 4: inspection waypoints demo
+add_executable(inspection_waypoints_demo
+  examples/demo_inspection.cpp
+)
+
+target_link_libraries(inspection_waypoints_demo
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(inspection_waypoints_demo
+  rclcpp
+)
 
 # ========= Install =========
 install(
@@ -93,6 +117,8 @@ install(
   TARGETS
     example_nav_to_pose
     go_through_poses_demo
+    follow_waypoints_demo
+    inspection_waypoints_demo
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 

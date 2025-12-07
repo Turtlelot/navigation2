@@ -78,7 +78,10 @@ struct NavigatorConfig
    * Default: 5 seconds.
    */
   std::chrono::seconds action_server_timeout{5};
-
+  /** @brief Action namespace. 
+ * Default: ""
+ */
+  std::string action_namespace = "";
   /**
    * @brief If true, automatically cancel any active action when the Navigator
    * object is destroyed.
@@ -585,6 +588,19 @@ private:
   void amclPoseCallback(const PoseWithCovarianceStamped::SharedPtr msg);
   void waitForInitialPose();
   void waitForNodeToActivate(const std::string & node_name);
+  /**
+   * @brief Append the action name with the action namespace
+   *
+   * @param action_name name of the action 
+   * @return action name with namespace
+   */
+  inline std::string nsAction(const std::string & action_name) const
+  {
+    if (config_.action_namespace.empty()) {
+      return action_name;
+    }
+    return config_.action_namespace + "/" + action_name;
+  }
 
   /**
    * @brief Send an action goal and manage the action client

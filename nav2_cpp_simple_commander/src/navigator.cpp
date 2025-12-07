@@ -32,7 +32,7 @@ bool Navigator::goToPose(
   NavigateToPose::Goal goal;
   goal.pose = pose;
   goal.behavior_tree = behavior_tree;
-  return sendActionGoal<NavigateToPose>(goal, "navigate_to_pose", nav_to_pose_client_);
+  return sendActionGoal<NavigateToPose>(goal, nsAction("navigate_to_pose"), nav_to_pose_client_);
 }
 
 bool Navigator::goThroughPoses(

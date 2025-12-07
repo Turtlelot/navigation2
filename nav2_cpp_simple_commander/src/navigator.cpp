@@ -384,14 +384,23 @@ void Navigator::lifecycleShutdown()
   RCLCPP_INFO(node_->get_logger(), "Lifecycle nodes shutdown complete.");
 }
 
-void Navigator::cancelTask()
+bool Navigator::cancelTask()
 {
-  if (action_handle_) {
-    RCLCPP_INFO(node_->get_logger(), "Canceling current task");
-    action_handle_->cancel(node_);
-  } else {
+  if (!action_handle_) {
     RCLCPP_WARN(node_->get_logger(), "No task to cancel");
+    return false;  // No task exists
   }
+
+  RCLCPP_INFO(node_->get_logger(), "Canceling current task");
+
+  // Perform cancel and return the result
+  bool result = action_handle_->cancel(node_);
+
+  if (!result) {
+    RCLCPP_WARN(node_->get_logger(), "Failed to cancel task");
+  }
+
+  return result;
 }
 
 bool Navigator::isTaskComplete()

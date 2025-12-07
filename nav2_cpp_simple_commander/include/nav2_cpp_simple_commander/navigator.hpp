@@ -344,8 +344,9 @@ public:
    * @details If a goal is active this will attempt to cancel it via the
    * action client. Cancellation is best-effort and callers should check
    * `isTaskComplete()` and `getTaskResult()` to confirm the final state.
+   * return true if action_handle_ ->cancel() returned true, false if action_handle_ is null
    */
-  void cancelTask();
+  bool cancelTask();
 
   /**
    * @brief Check whether the current task is complete.

@@ -93,7 +93,7 @@ int main(int argc, char ** argv)
       }
       rclcpp::sleep_for(200ms);
     }
-    //ToDO: add per-waypoint success/failure logging 
+    //ToDO: add per-waypoint success/failure logging
     // missed waypoints in the followwaypoints ation is not accessible in the current API
 
     //Check Result

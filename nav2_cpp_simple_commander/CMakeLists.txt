@@ -105,6 +105,45 @@ ament_target_dependencies(inspection_waypoints_demo
   rclcpp
 )
 
+## Example 5: assisted teleop demo
+add_executable(example_assisted_teleop
+  examples/example_assisted_teleop.cpp
+)
+
+target_link_libraries(example_assisted_teleop
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(example_assisted_teleop
+  rclcpp
+)
+
+## Example 6: follow path demo
+add_executable(follow_path
+  examples/example_follow_path.cpp
+)
+
+target_link_libraries(follow_path
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(follow_path
+  rclcpp
+)
+
+
+## Example 7: security_demo
+add_executable(security_demo
+  examples/demo_security.cpp
+)
+
+target_link_libraries(security_demo
+  ${PROJECT_NAME}
+)
+
+ament_target_dependencies(security_demo
+  rclcpp
+)
 # ========= Install =========
 install(
   TARGETS ${PROJECT_NAME}
@@ -119,6 +158,9 @@ install(
     go_through_poses_demo
     follow_waypoints_demo
     inspection_waypoints_demo
+    example_assisted_teleop
+    follow_path
+    security_demo
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -42,7 +42,7 @@ bool Navigator::goThroughPoses(
   goal.poses = poses;
   goal.behavior_tree = behavior_tree;
   return sendActionGoal<NavigateThroughPoses>(
-    goal, "navigate_through_poses", nav_through_poses_client_);
+    goal, nsAction("navigate_through_poses"), nav_through_poses_client_);
 }
 
 bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStamped> & poses)
@@ -50,7 +50,7 @@ bool Navigator::followWaypoints(const std::vector<geometry_msgs::msg::PoseStampe
   FollowWaypoints::Goal goal;
   goal.poses = poses;
 
-  return sendActionGoal<FollowWaypoints>(goal, "follow_waypoints", follow_waypoints_client_);
+  return sendActionGoal<FollowWaypoints>(goal, nsAction("follow_waypoints"), follow_waypoints_client_);
 }
 
 // bool Navigator::followGpsWaypoints(const std::vector<GeoPose> & poses)
@@ -66,7 +66,7 @@ bool Navigator::spin(double spin_dist, double time_allowance)
   goal.target_yaw = spin_dist;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  return sendActionGoal<Spin>(goal, "spin", spin_client_);
+  return sendActionGoal<Spin>(goal, nsAction("spin"), spin_client_);
 }
 
 bool Navigator::backup(double backup_dist, double backup_speed, double time_allowance)
@@ -79,7 +79,7 @@ bool Navigator::backup(double backup_dist, double backup_speed, double time_allo
   goal.speed = backup_speed;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  return sendActionGoal<BackUp>(goal, "back_up", backup_client_);
+  return sendActionGoal<BackUp>(goal, nsAction("back_up"), backup_client_);
 }
 
 bool Navigator::driveOnHeading(double dist, double speed, double time_allowance)
@@ -91,7 +91,7 @@ bool Navigator::driveOnHeading(double dist, double speed, double time_allowance)
   goal.speed = speed;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  return sendActionGoal<DriveOnHeading>(goal, "drive_on_heading", drive_on_heading_client_);
+  return sendActionGoal<DriveOnHeading>(goal, nsAction("drive_on_heading"), drive_on_heading_client_);
 }
 
 bool Navigator::assistedTeleop(double time_allowance)
@@ -99,7 +99,7 @@ bool Navigator::assistedTeleop(double time_allowance)
   AssistedTeleop::Goal goal;
   goal.time_allowance = rclcpp::Duration::from_seconds(time_allowance);
 
-  return sendActionGoal<AssistedTeleop>(goal, "assisted_teleop", assisted_teleop_client_);
+  return sendActionGoal<AssistedTeleop>(goal, nsAction("assisted_teleop"), assisted_teleop_client_);
 }
 
 bool Navigator::followPath(
@@ -110,7 +110,7 @@ bool Navigator::followPath(
   goal.controller_id = controller_id;
   goal.goal_checker_id = goal_checker_id;
 
-  return sendActionGoal<FollowPath>(goal, "follow_path", follow_path_client_);
+  return sendActionGoal<FollowPath>(goal, nsAction("follow_path"), follow_path_client_);
 }
 
 std::optional<Navigator::Path> Navigator::getPath(
@@ -124,7 +124,7 @@ std::optional<Navigator::Path> Navigator::getPath(
   goal.use_start = use_start;
 
   if (!sendActionGoal<ComputePathToPose>(
-        goal, "compute_path_to_pose", compute_path_to_pose_client_)) {
+        goal, nsAction("compute_path_to_pose"), compute_path_to_pose_client_)) {
     return std::nullopt;
   }
 
@@ -147,7 +147,7 @@ std::optional<Navigator::Path> Navigator::getPathThroughPoses(
   goal.use_start = use_start;
 
   if (!sendActionGoal<ComputePathThroughPoses>(
-        goal, "compute_path_through_poses", compute_path_through_poses_client_)) {
+        goal, nsAction("compute_path_through_poses"), compute_path_through_poses_client_)) {
     return std::nullopt;
   }
 
@@ -168,7 +168,7 @@ std::optional<Navigator::Path> Navigator::smoothPath(
   goal.max_smoothing_duration = rclcpp::Duration::from_seconds(max_duration);
   goal.check_for_collisions = check_for_collision;
 
-  if (!sendActionGoal<SmoothPath>(goal, "smooth_path", smooth_path_client_)) {
+  if (!sendActionGoal<SmoothPath>(goal, nsAction("smooth_path"), smooth_path_client_)) {
     return std::nullopt;
   }
 
